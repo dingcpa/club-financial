@@ -1,22 +1,22 @@
 <template>
-  <v-card max-width="600" class="mx-auto" elevation="1">
-    <v-card-title class="d-flex justify-space-between align-center pa-4">
+  <v-card class="mx-auto" elevation="1">
+    <v-card-title class="d-flex justify-space-between align-center pa-3 pa-sm-4">
       <div class="d-flex align-center ga-2">
         <v-icon color="error">mdi-minus-circle</v-icon>
-        <span class="text-h6 font-weight-bold">{{ editingRecord ? '編輯支出單' : '填寫支出單' }}</span>
+        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯支出單' : '填寫支出單' }}</span>
       </div>
       <v-btn v-if="editingRecord" icon variant="tonal" size="small" @click="handleCancelEdit">
         <v-icon>mdi-close</v-icon>
       </v-btn>
     </v-card-title>
 
-    <v-card-text>
+    <v-card-text class="pa-2 pa-sm-4">
       <v-form @submit.prevent="handleSubmit">
-        <v-row>
-          <v-col cols="6">
+        <v-row dense>
+          <v-col cols="12" sm="6">
             <v-text-field v-model="formData.date" label="支出日期" type="date" density="compact" variant="outlined" required />
           </v-col>
-          <v-col cols="6">
+          <v-col cols="12" sm="6">
             <v-select v-model="formData.account" label="付款人" :items="ACCOUNTS" density="compact" variant="outlined" required />
           </v-col>
         </v-row>
@@ -45,7 +45,7 @@
         />
 
         <!-- 平攤設定 -->
-        <v-card variant="outlined" class="pa-3 mb-3" rounded="lg">
+        <v-card variant="outlined" class="pa-2 pa-sm-3 mb-3" rounded="lg">
           <v-checkbox
             v-model="formData.isPrepaid"
             label="此筆為「跨月份平攤」費用（預付性質）"
@@ -54,7 +54,7 @@
             hide-details
           />
           <div v-if="formData.isPrepaid" class="mt-3">
-            <v-row align="center">
+            <v-row dense align="center">
               <v-col cols="5">
                 <label class="text-caption text-medium-emphasis d-block mb-1">開始年月</label>
                 <v-text-field v-model="formData.startPeriod" type="month" density="compact" variant="outlined" hide-details required @update:model-value="handleStartPeriodChange" />
@@ -89,10 +89,10 @@
           rows="3"
           density="compact"
           variant="outlined"
-          class="mb-4"
+          class="mb-3"
         />
 
-        <div class="d-flex ga-3">
+        <div class="d-flex flex-wrap ga-2">
           <v-btn type="submit" color="error" variant="flat" prepend-icon="mdi-content-save" class="flex-grow-1">
             {{ editingRecord ? '更新支出' : '儲存支出' }}
           </v-btn>

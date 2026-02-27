@@ -5,12 +5,12 @@
     </div>
     <v-card v-else elevation="1">
       <!-- 標題列 -->
-      <v-card-title class="d-flex flex-wrap justify-space-between align-center pa-4 ga-2">
+      <v-card-title class="d-flex flex-wrap justify-space-between align-center pa-3 pa-sm-4 ga-2">
         <div class="d-flex align-center ga-2">
           <v-icon color="primary">mdi-account-group</v-icon>
-          <span class="text-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 社友繳費明細表</span>
+          <span class="text-body-1 text-sm-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 社友繳費明細表</span>
         </div>
-        <div class="d-flex ga-2">
+        <div class="d-flex flex-wrap ga-2">
           <v-btn color="primary" prepend-icon="mdi-plus" size="small" @click="openAddModal">新增收費項目</v-btn>
           <v-select
             v-model="selectedYear"
@@ -20,35 +20,35 @@
             density="compact"
             variant="outlined"
             hide-details
-            style="min-width:120px"
+            style="min-width:110px"
           />
         </div>
       </v-card-title>
 
-      <!-- 繳費表格 -->
-      <div style="overflow:auto; max-height:calc(100vh - 300px)">
-        <v-table density="compact" style="min-width:600px">
+      <!-- 繳費表格（橫向捲動，sticky 欄） -->
+      <div style="overflow:auto; max-height:calc(100vh - 280px)">
+        <v-table density="compact" style="min-width:480px">
           <thead>
             <tr>
-              <th class="sticky-col-0" style="min-width:80px">職稱</th>
-              <th class="sticky-col-1" style="min-width:100px">社友姓名</th>
+              <th class="sticky-col-0" style="min-width:60px">職稱</th>
+              <th class="sticky-col-1" style="min-width:80px">姓名</th>
               <th
                 v-for="cat in duesCategories"
                 :key="cat"
                 class="text-center"
-                style="min-width:130px;white-space:nowrap;cursor:pointer"
+                style="min-width:110px;white-space:nowrap;cursor:pointer"
                 @click="openEditModal(cat)"
                 :title="'點擊編輯 ' + cat + ' 的收費設定'"
               >
                 <div class="d-flex flex-column align-center ga-1">
-                  <span>{{ cat }}</span>
+                  <span class="text-caption">{{ cat }}</span>
                   <span v-if="getCatSetting(cat)?.standardAmount > 0" class="text-caption text-primary">
                     (應收 {{ getCatSetting(cat).standardAmount.toLocaleString() }})
                   </span>
                 </div>
               </th>
-              <th class="text-right" style="min-width:100px;white-space:nowrap;border-left:1px solid #e2e8f0">年度總計</th>
-              <th class="text-right text-success" style="min-width:100px;white-space:nowrap;border-left:1px solid #bbf7d0;background:#ecfdf5">溢收款餘額</th>
+              <th class="text-right" style="min-width:90px;white-space:nowrap;border-left:1px solid #e2e8f0">年度總計</th>
+              <th class="text-right text-success" style="min-width:90px;white-space:nowrap;border-left:1px solid #bbf7d0;background:#ecfdf5">溢收款</th>
             </tr>
           </thead>
           <tbody>
@@ -59,28 +59,28 @@
             </tr>
             <tr v-for="member in allUniqueMembers" :key="member">
               <td class="sticky-col-0 text-caption text-primary font-weight-medium">{{ getMemberTitle(member) }}</td>
-              <td class="sticky-col-1 font-weight-medium">{{ member }}</td>
+              <td class="sticky-col-1 text-caption font-weight-medium">{{ member }}</td>
               <td v-for="cat in duesCategories" :key="cat" class="text-center pa-2">
                 <template v-if="getPayment(member, cat) > 0">
                   <div class="d-flex flex-column align-center" style="cursor:pointer" @click="onEditPayment(member, cat)">
-                    <v-icon size="16" color="success">mdi-check-circle</v-icon>
+                    <v-icon size="14" color="success">mdi-check-circle</v-icon>
                     <span class="text-caption text-success font-weight-bold">{{ getPayment(member, cat).toLocaleString() }}</span>
                   </div>
                 </template>
                 <template v-else>
                   <div class="d-flex flex-column align-center" style="opacity:0.4">
-                    <v-icon size="16" color="grey-lighten-1">mdi-close-circle</v-icon>
+                    <v-icon size="14" color="grey-lighten-1">mdi-close-circle</v-icon>
                     <span v-if="getCatSetting(cat)?.standardAmount > 0" class="text-caption text-medium-emphasis">
-                      應收 {{ getCatSetting(cat).standardAmount.toLocaleString() }}
+                      {{ getCatSetting(cat).standardAmount.toLocaleString() }}
                     </span>
                   </div>
                 </template>
               </td>
-              <td class="text-right font-weight-bold text-primary" style="border-left:1px solid #e2e8f0;white-space:nowrap">
-                NT$ {{ getMemberTotal(member).toLocaleString() }}
+              <td class="text-right text-caption font-weight-bold text-primary" style="border-left:1px solid #e2e8f0;white-space:nowrap">
+                {{ getMemberTotal(member).toLocaleString() }}
               </td>
-              <td class="text-right font-weight-bold" :class="getOverpayment(member) > 0 ? 'text-success' : 'text-medium-emphasis'" style="border-left:1px solid #bbf7d0;background:#ecfdf5;white-space:nowrap">
-                {{ getOverpayment(member) > 0 ? 'NT$ ' + Math.round(getOverpayment(member)).toLocaleString() : '—' }}
+              <td class="text-right text-caption font-weight-bold" :class="getOverpayment(member) > 0 ? 'text-success' : 'text-medium-emphasis'" style="border-left:1px solid #bbf7d0;background:#ecfdf5;white-space:nowrap">
+                {{ getOverpayment(member) > 0 ? Math.round(getOverpayment(member)).toLocaleString() : '—' }}
               </td>
             </tr>
           </tbody>
@@ -88,9 +88,9 @@
       </div>
 
       <!-- 功能說明 -->
-      <v-card-text>
-        <v-alert color="primary" variant="tonal" icon="mdi-information" density="compact" class="mt-4">
-          <ul class="text-body-2 mb-0 pl-2">
+      <v-card-text class="pa-2 pa-sm-4">
+        <v-alert color="primary" variant="tonal" icon="mdi-information" density="compact" class="mt-2">
+          <ul class="text-caption mb-0 pl-2">
             <li>點擊 <strong>[新增收費項目]</strong> 按鈕可擴充報表欄位。</li>
             <li>點擊 <strong>表頭項目名稱</strong>可設定統一應收金額。</li>
             <li>設定金額後，未繳費社友的格位會自動顯示 <strong>[應收 XXX]</strong> 提醒文字。</li>
@@ -100,7 +100,7 @@
     </v-card>
 
     <!-- 收費設定 Dialog -->
-    <v-dialog v-model="isModalOpen" max-width="400">
+    <v-dialog v-model="isModalOpen" :max-width="xs ? undefined : 400" :fullscreen="xs">
       <v-card>
         <v-card-title class="d-flex justify-space-between align-center pa-4">
           <span class="text-h6 font-weight-bold">{{ editingSetting ? '編輯收費設定' : '新增收費項目' }}</span>
@@ -126,7 +126,10 @@
 
 <script setup>
 import { ref, computed, inject } from 'vue'
+import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
+
+const { xs } = useDisplay()
 
 const records = inject('records')
 const members = inject('members')
@@ -285,7 +288,7 @@ async function handleDeleteSetting() {
 }
 .sticky-col-1 {
   position: sticky;
-  left: 80px;
+  left: 60px;
   background: white;
   z-index: 1;
   border-right: 1px solid #e2e8f0;

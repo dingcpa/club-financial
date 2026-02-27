@@ -1,5 +1,12 @@
 <template>
-  <div>
+  <!-- 非管理員：拒絕存取 -->
+  <v-container v-if="!isAdmin" class="text-center py-16">
+    <v-icon size="64" color="error" class="mb-4">mdi-shield-off</v-icon>
+    <div class="text-h6 mb-2">存取被拒</div>
+    <div class="text-body-2 text-medium-emphasis">您沒有存取此頁面的權限</div>
+  </v-container>
+
+  <div v-else>
     <div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-2">
       <h2 class="text-h6 font-weight-bold">帳號管理</h2>
       <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openCreate">
@@ -17,6 +24,15 @@
       >
         <template #item.display_name="{ item }">
           {{ item.display_name || item.username }}
+        </template>
+        <template #item.role="{ item }">
+          <v-chip
+            :color="item.role === 'admin' ? 'primary' : 'default'"
+            size="small"
+            label
+          >
+            {{ item.role === 'admin' ? '管理員' : '使用者' }}
+          </v-chip>
         </template>
         <template #item.created_at="{ item }">
           {{ item.created_at ? item.created_at.slice(0, 10) : '' }}
@@ -56,6 +72,18 @@
             class="mb-3"
             prepend-inner-icon="mdi-badge-account"
           />
+          <v-select
+            v-model="form.role"
+            :items="roleOptions"
+            label="角色"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            prepend-inner-icon="mdi-shield-account"
+            :disabled="editingUser && editingUser.id === currentUserId"
+            :hint="editingUser && editingUser.id === currentUserId ? '不可修改自己的角色' : ''"
+            persistent-hint
+          />
           <v-text-field
             v-model="form.password"
             :label="editingUser ? '新密碼（留空不更改）' : '密碼'"
@@ -80,6 +108,7 @@
   </div>
 </template>
 
+
 <script setup>
 import { ref, onMounted, inject } from 'vue'
 import { useDisplay } from 'vuetify'
@@ -88,7 +117,7 @@ import { apiFetch } from '../composables/apiFetch.js'
 import { useAuth } from '../composables/useAuth.js'
 
 const { xs } = useDisplay()
-const { user } = useAuth()
+const { user, isAdmin } = useAuth()
 const currentUserId = inject('currentUserId', null)
 
 const users = ref([])
@@ -99,11 +128,17 @@ const showPwd = ref(false)
 const editingUser = ref(null)
 const formError = ref('')
 
-const form = ref({ username: '', displayName: '', password: '' })
+const form = ref({ username: '', displayName: '', password: '', role: 'user' })
+
+const roleOptions = [
+  { title: '管理員', value: 'admin' },
+  { title: '使用者', value: 'user' },
+]
 
 const headers = [
   { title: '帳號', key: 'username', sortable: false },
   { title: '顯示名稱', key: 'display_name', sortable: false },
+  { title: '角色', key: 'role', sortable: false },
   { title: '建立日期', key: 'created_at', sortable: false },
   { title: '操作', key: 'actions', sortable: false, align: 'end' },
 ]
@@ -120,7 +155,7 @@ async function fetchUsers() {
 
 function openCreate() {
   editingUser.value = null
-  form.value = { username: '', displayName: '', password: '' }
+  form.value = { username: '', displayName: '', password: '', role: 'user' }
   formError.value = ''
   showPwd.value = false
   dialog.value = true
@@ -128,7 +163,7 @@ function openCreate() {
 
 function openEdit(u) {
   editingUser.value = u
-  form.value = { username: u.username, displayName: u.display_name || '', password: '' }
+  form.value = { username: u.username, displayName: u.display_name || '', password: '', role: u.role || 'user' }
   formError.value = ''
   showPwd.value = false
   dialog.value = true
@@ -145,10 +180,17 @@ async function save() {
     if (editingUser.value) {
       const body = { displayName: form.value.displayName }
       if (form.value.password) body.password = form.value.password
-      await apiFetch(`/api/users/${editingUser.value.id}`, {
+      // 只有非自己才能修改角色
+      if (editingUser.value.id !== currentUserId?.value) body.role = form.value.role
+      const res = await apiFetch(`/api/users/${editingUser.value.id}`, {
         method: 'PUT',
         body: JSON.stringify(body),
       })
+      if (!res.ok) {
+        const err = await res.json()
+        formError.value = err.error || '更新失敗'
+        return
+      }
     } else {
       const res = await apiFetch('/api/users', {
         method: 'POST',
@@ -156,6 +198,7 @@ async function save() {
           username: form.value.username,
           password: form.value.password,
           displayName: form.value.displayName,
+          role: form.value.role,
         }),
       })
       if (!res.ok) {

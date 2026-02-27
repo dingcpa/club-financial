@@ -1,22 +1,22 @@
 <template>
-  <v-card max-width="600" class="mx-auto" elevation="1">
-    <v-card-title class="d-flex justify-space-between align-center pa-4">
+  <v-card class="mx-auto" elevation="1">
+    <v-card-title class="d-flex justify-space-between align-center pa-3 pa-sm-4">
       <div class="d-flex align-center ga-2">
         <v-icon color="success">mdi-plus-circle</v-icon>
-        <span class="text-h6 font-weight-bold">{{ editingRecord ? '編輯收入單' : '填寫收入單' }}</span>
+        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯收入單' : '填寫收入單' }}</span>
       </div>
       <v-btn v-if="editingRecord" icon variant="tonal" size="small" @click="handleCancelEdit">
         <v-icon>mdi-close</v-icon>
       </v-btn>
     </v-card-title>
 
-    <v-card-text>
+    <v-card-text class="pa-2 pa-sm-4">
       <v-form @submit.prevent="handleSubmit">
-        <v-row>
-          <v-col cols="6">
+        <v-row dense>
+          <v-col cols="12" sm="6">
             <v-text-field v-model="formData.date" label="收費日期" type="date" density="compact" variant="outlined" required />
           </v-col>
-          <v-col cols="6">
+          <v-col cols="12" sm="6">
             <v-select v-model="formData.account" label="收款人" :items="ACCOUNTS" density="compact" variant="outlined" required />
           </v-col>
         </v-row>
@@ -36,13 +36,13 @@
         />
 
         <!-- 批次待沖帳區塊 -->
-        <v-card v-if="!editingRecord && outstandingDues.length > 0" variant="tonal" color="primary" class="mb-4 pa-3" rounded="lg">
-          <div class="text-subtitle-2 font-weight-bold text-primary mb-3 d-flex align-center ga-1">
-            <v-icon size="18">mdi-content-save</v-icon> 待沖帳項目（截至今日）
+        <v-card v-if="!editingRecord && outstandingDues.length > 0" variant="tonal" color="primary" class="mb-4 pa-2 pa-sm-3" rounded="lg">
+          <div class="text-caption font-weight-bold text-primary mb-3 d-flex align-center ga-1">
+            <v-icon size="16">mdi-content-save</v-icon> 待沖帳項目（截至今日）
           </div>
 
-          <v-row>
-            <v-col :cols="prevOverpayment > 0 ? 6 : 12">
+          <v-row dense>
+            <v-col cols="12" sm="6">
               <v-text-field
                 v-model="receivedAmount"
                 label="收款金額 (NT$)"
@@ -53,10 +53,10 @@
                 required
               />
             </v-col>
-            <v-col v-if="prevOverpayment > 0" cols="6">
+            <v-col v-if="prevOverpayment > 0" cols="12" sm="6">
               <v-card color="success" variant="tonal" class="pa-2 h-100 d-flex flex-column justify-center">
                 <div class="text-caption text-medium-emphasis">前期溢收款餘額</div>
-                <div class="text-body-1 font-weight-bold text-success">NT$ {{ prevOverpayment.toLocaleString() }}</div>
+                <div class="text-body-2 font-weight-bold text-success">NT$ {{ prevOverpayment.toLocaleString() }}</div>
               </v-card>
             </v-col>
           </v-row>
@@ -66,7 +66,7 @@
               可用沖帳合計
               <span v-if="prevOverpayment > 0" class="text-caption">（含前期溢收款 {{ prevOverpayment.toLocaleString() }}）</span>
             </span>
-            <span class="font-weight-bold text-primary">NT$ {{ totalAvailable.toLocaleString() }}</span>
+            <span class="text-caption font-weight-bold text-primary">NT$ {{ totalAvailable.toLocaleString() }}</span>
           </v-card>
 
           <div class="d-flex flex-column ga-2">
@@ -89,14 +89,14 @@
                     @click.stop="toggleDueSelection(u.category)"
                   />
                   <div>
-                    <div class="text-body-2 font-weight-medium">{{ u.category }}</div>
+                    <div class="text-caption font-weight-medium">{{ u.category }}</div>
                     <div v-if="u.dueDate" class="text-caption text-medium-emphasis">應收日：{{ u.dueDate }}</div>
                   </div>
                 </div>
                 <div class="d-flex align-center ga-1">
-                  <v-icon v-if="settlement && settlement.settled.some(s => s.category === u.category)" size="16" color="success">mdi-check-circle</v-icon>
-                  <v-icon v-if="settlement && settlement.skipped.some(s => s.category === u.category)" size="16" color="warning">mdi-alert-circle</v-icon>
-                  <span class="font-weight-bold" :class="getAmtClass(u.category)">NT$ {{ u.standardAmount.toLocaleString() }}</span>
+                  <v-icon v-if="settlement && settlement.settled.some(s => s.category === u.category)" size="14" color="success">mdi-check-circle</v-icon>
+                  <v-icon v-if="settlement && settlement.skipped.some(s => s.category === u.category)" size="14" color="warning">mdi-alert-circle</v-icon>
+                  <span class="text-caption font-weight-bold" :class="getAmtClass(u.category)">NT$ {{ u.standardAmount.toLocaleString() }}</span>
                 </div>
               </div>
             </v-card>
@@ -105,16 +105,16 @@
           <!-- 沖帳預覽 -->
           <div v-if="settlement" class="mt-3 pt-3" style="border-top:1px dashed #cbd5e1">
             <div v-if="settlement.settled.length > 0" class="d-flex justify-space-between mb-1">
-              <span class="text-success text-body-2">✅ 可沖清 {{ settlement.settled.length }} 項</span>
-              <span class="font-weight-bold text-success">NT$ {{ settlement.settled.reduce((s, i) => s + i.standardAmount, 0).toLocaleString() }}</span>
+              <span class="text-success text-caption">可沖清 {{ settlement.settled.length }} 項</span>
+              <span class="text-caption font-weight-bold text-success">NT$ {{ settlement.settled.reduce((s, i) => s + i.standardAmount, 0).toLocaleString() }}</span>
             </div>
             <div v-if="settlement.skipped.length > 0" class="d-flex justify-space-between mb-1">
-              <span class="text-warning text-body-2">⚠️ 金額不足，跳過 {{ settlement.skipped.length }} 項</span>
-              <span class="font-weight-bold text-warning">NT$ {{ settlement.skipped.reduce((s, i) => s + i.standardAmount, 0).toLocaleString() }}</span>
+              <span class="text-warning text-caption">金額不足，跳過 {{ settlement.skipped.length }} 項</span>
+              <span class="text-caption font-weight-bold text-warning">NT$ {{ settlement.skipped.reduce((s, i) => s + i.standardAmount, 0).toLocaleString() }}</span>
             </div>
             <div v-if="settlement.surplus > 0" class="d-flex justify-space-between">
-              <span class="text-primary text-body-2">💰 沖完後溢收款</span>
-              <span class="font-weight-bold text-primary">NT$ {{ settlement.surplus.toLocaleString() }}</span>
+              <span class="text-primary text-caption">沖完後溢收款</span>
+              <span class="text-caption font-weight-bold text-primary">NT$ {{ settlement.surplus.toLocaleString() }}</span>
             </div>
           </div>
         </v-card>
@@ -143,7 +143,7 @@
           />
 
           <!-- 平攤設定 -->
-          <v-card variant="tonal" color="success" class="pa-3 mb-3" rounded="lg">
+          <v-card variant="tonal" color="success" class="pa-2 pa-sm-3 mb-3" rounded="lg">
             <v-checkbox
               v-model="formData.isPrepaid"
               label="此筆為「跨月份平攤」收入（預收性質）"
@@ -152,7 +152,7 @@
               hide-details
             />
             <div v-if="formData.isPrepaid" class="mt-3">
-              <v-row align="center">
+              <v-row dense align="center">
                 <v-col cols="5">
                   <label class="text-caption text-medium-emphasis d-block mb-1">認列開始</label>
                   <v-text-field v-model="formData.startPeriod" type="month" density="compact" variant="outlined" hide-details required @update:model-value="handleStartPeriodChange" />
@@ -185,10 +185,10 @@
           rows="3"
           density="compact"
           variant="outlined"
-          class="mb-4"
+          class="mb-3"
         />
 
-        <div class="d-flex ga-3">
+        <div class="d-flex flex-wrap ga-2">
           <v-btn type="submit" color="primary" variant="flat" prepend-icon="mdi-content-save" class="flex-grow-1">
             {{ editingRecord ? '更新收入' : '儲存收入' }}
           </v-btn>

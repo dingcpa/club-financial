@@ -1,27 +1,28 @@
 <template>
-  <v-card max-width="600" class="mx-auto" elevation="1">
-    <v-card-title class="d-flex justify-space-between align-center pa-4">
+  <v-card class="mx-auto" elevation="1">
+    <v-card-title class="d-flex justify-space-between align-center pa-3 pa-sm-4">
       <div class="d-flex align-center ga-2">
         <v-icon color="primary">mdi-swap-horizontal</v-icon>
-        <span class="text-h6 font-weight-bold">{{ editingRecord ? '編輯調撥單' : '填寫調撥單' }}</span>
+        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯調撥單' : '填寫調撥單' }}</span>
       </div>
       <v-btn v-if="editingRecord" icon variant="tonal" size="small" @click="handleCancelEdit">
         <v-icon>mdi-close</v-icon>
       </v-btn>
     </v-card-title>
 
-    <v-card-text>
+    <v-card-text class="pa-2 pa-sm-4">
       <v-form @submit.prevent="handleSubmit">
         <v-text-field v-model="formData.date" label="調撥日期" type="date" density="compact" variant="outlined" required class="mb-3" />
 
-        <v-row align="center" class="mb-3">
-          <v-col cols="5">
+        <v-row dense align="center" class="mb-3">
+          <v-col cols="12" sm="5">
             <v-select v-model="formData.fromAccount" label="轉出帳戶" :items="ACCOUNTS" density="compact" variant="outlined" required />
           </v-col>
-          <v-col cols="2" class="text-center">
-            <v-icon>mdi-arrow-right</v-icon>
+          <v-col cols="12" sm="2" class="text-center">
+            <v-icon class="d-none d-sm-inline-flex">mdi-arrow-right</v-icon>
+            <v-icon class="d-inline-flex d-sm-none">mdi-arrow-down</v-icon>
           </v-col>
-          <v-col cols="5">
+          <v-col cols="12" sm="5">
             <v-select v-model="formData.toAccount" label="轉入帳戶" :items="ACCOUNTS" density="compact" variant="outlined" required />
           </v-col>
         </v-row>
@@ -43,10 +44,10 @@
           rows="3"
           density="compact"
           variant="outlined"
-          class="mb-4"
+          class="mb-3"
         />
 
-        <div class="d-flex ga-3">
+        <div class="d-flex flex-wrap ga-2">
           <v-btn type="submit" color="primary" variant="flat" prepend-icon="mdi-content-save" class="flex-grow-1">
             {{ editingRecord ? '更新調撥' : '儲存調撥' }}
           </v-btn>

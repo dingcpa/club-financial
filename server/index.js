@@ -33,6 +33,11 @@ function authMiddleware(req, res, next) {
     }
 }
 
+function adminOnly(req, res, next) {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: '權限不足，需要管理員身份' });
+    next();
+}
+
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -41,17 +46,17 @@ app.post('/api/auth/login', async (req, res) => {
         const ok = await bcrypt.compare(password, rows[0].password_hash);
         if (!ok) return res.status(401).json({ error: '帳號或密碼錯誤' });
         const token = jwt.sign(
-            { id: rows[0].id, username: rows[0].username, displayName: rows[0].display_name },
+            { id: rows[0].id, username: rows[0].username, displayName: rows[0].display_name, role: rows[0].role },
             JWT_SECRET, { expiresIn: '7d' }
         );
-        res.json({ token, displayName: rows[0].display_name });
+        res.json({ token, displayName: rows[0].display_name, role: rows[0].role });
     } catch (e) {
         res.status(500).json({ error: 'Login failed' });
     }
 });
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-    res.json({ id: req.user.id, username: req.user.username, displayName: req.user.displayName });
+    res.json({ id: req.user.id, username: req.user.username, displayName: req.user.displayName, role: req.user.role });
 });
 
 // 所有 /api 路由（除 /api/auth/login）均需 token
@@ -416,10 +421,10 @@ app.get('/api/debug', async (req, res) => {
 });
 
 // ─── Users ─────────────────────────────────────────────────
-app.get('/api/users', authMiddleware, async (req, res) => {
+app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
     try {
         const [rows] = await pool.query(
-            'SELECT id, username, display_name, created_at FROM users ORDER BY created_at ASC'
+            'SELECT id, username, display_name, role, created_at FROM users ORDER BY created_at ASC'
         );
         res.json(rows);
     } catch (e) {
@@ -427,14 +432,15 @@ app.get('/api/users', authMiddleware, async (req, res) => {
     }
 });
 
-app.post('/api/users', authMiddleware, async (req, res) => {
+app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
     try {
-        const { username, password, displayName } = req.body;
+        const { username, password, displayName, role = 'user' } = req.body;
         if (!username || !password) return res.status(400).json({ error: '帳號與密碼為必填' });
+        if (!['admin', 'user'].includes(role)) return res.status(400).json({ error: '角色必須為 admin 或 user' });
         const hash = await bcrypt.hash(password, 12);
         await pool.query(
-            'INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)',
-            [username, hash, displayName || username]
+            'INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)',
+            [username, hash, displayName || username, role]
         );
         res.status(201).json({ message: '使用者建立成功' });
     } catch (e) {
@@ -443,26 +449,28 @@ app.post('/api/users', authMiddleware, async (req, res) => {
     }
 });
 
-app.put('/api/users/:id', authMiddleware, async (req, res) => {
+app.put('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const { password, displayName } = req.body;
-        if (password) {
-            const hash = await bcrypt.hash(password, 12);
-            await pool.query(
-                'UPDATE users SET password_hash=?, display_name=? WHERE id=?',
-                [hash, displayName, id]
-            );
-        } else {
-            await pool.query('UPDATE users SET display_name=? WHERE id=?', [displayName, id]);
-        }
+        const { password, displayName, role } = req.body;
+        // 不可修改自己的角色（防止自己降權）
+        if (role && id === req.user.id) return res.status(400).json({ error: '不可修改自己的角色' });
+        if (role && !['admin', 'user'].includes(role)) return res.status(400).json({ error: '角色必須為 admin 或 user' });
+        const sets = [];
+        const params = [];
+        if (displayName !== undefined) { sets.push('display_name=?'); params.push(displayName); }
+        if (role)     { sets.push('role=?');         params.push(role); }
+        if (password) { sets.push('password_hash=?'); params.push(await bcrypt.hash(password, 12)); }
+        if (sets.length === 0) return res.status(400).json({ error: '無可更新欄位' });
+        params.push(id);
+        await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id=?`, params);
         res.json({ message: '更新成功' });
     } catch (e) {
         res.status(500).json({ error: 'Failed to update user' });
     }
 });
 
-app.delete('/api/users/:id', authMiddleware, async (req, res) => {
+app.delete('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         if (id === req.user.id) return res.status(400).json({ error: '不可刪除自己的帳號' });

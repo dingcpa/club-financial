@@ -69,9 +69,12 @@ async function initDB() {
       username VARCHAR(50) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
       display_name VARCHAR(100),
+      role VARCHAR(20) NOT NULL DEFAULT 'user',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) CHARACTER SET utf8mb4
   `)
+  // 為已存在的 users 表補上 role 欄位（MariaDB 支援 IF NOT EXISTS）
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`)
   console.log('DB tables initialized')
 }
 

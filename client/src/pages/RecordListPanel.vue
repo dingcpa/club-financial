@@ -1,8 +1,8 @@
 <template>
   <div>
-    <div class="d-flex align-center ga-2 mb-6">
-      <v-icon :color="cfg.color" size="28">{{ cfg.icon }}</v-icon>
-      <h3 class="text-h5 font-weight-bold">{{ cfg.label }}歷史記錄</h3>
+    <div class="d-flex align-center ga-2 mb-4">
+      <v-icon :color="cfg.color" size="24">{{ cfg.icon }}</v-icon>
+      <h3 class="text-body-1 text-sm-h5 font-weight-bold">{{ cfg.label }}歷史記錄</h3>
       <v-chip size="small" variant="tonal" :color="cfg.color">{{ filtered.length }} 筆</v-chip>
     </div>
 
@@ -16,22 +16,22 @@
       density="compact"
       variant="outlined"
       hide-details
-      class="mb-4"
+      class="mb-3"
       @update:model-value="page = 1"
     />
 
-    <!-- Table -->
+    <!-- Table（手機橫向捲動） -->
     <v-card elevation="1" :style="`border:1px solid ${cfg.borderColor}`">
       <div style="overflow-x:auto">
         <v-table density="compact">
           <thead :style="`background:${cfg.bgColor}`">
             <tr>
-              <th>日期</th>
-              <th>{{ type === 'transfer' ? '帳戶' : '項目' }}</th>
-              <th v-if="type !== 'transfer'">對象 / 帳戶</th>
-              <th class="text-right">金額</th>
-              <th>備註</th>
-              <th class="text-center">操作</th>
+              <th class="text-caption">日期</th>
+              <th class="text-caption">{{ type === 'transfer' ? '帳戶' : '項目' }}</th>
+              <th v-if="type !== 'transfer'" class="text-caption">對象 / 帳戶</th>
+              <th class="text-right text-caption">金額</th>
+              <th class="text-caption d-none d-sm-table-cell">備註</th>
+              <th class="text-center text-caption">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -47,21 +47,21 @@
               style="cursor:pointer"
               @click="handleEditClick(r)"
             >
-              <td class="text-caption text-medium-emphasis">{{ toMinguoDate(r.date) }}</td>
+              <td class="text-caption text-medium-emphasis" style="white-space:nowrap">{{ toMinguoDate(r.date) }}</td>
               <td>
-                <span v-if="type === 'transfer'" class="text-primary font-weight-medium">
+                <span v-if="type === 'transfer'" class="text-caption text-primary font-weight-medium">
                   {{ r.fromAccount }} → {{ r.toAccount }}
                 </span>
-                <span v-else class="font-weight-medium">{{ r.item }}</span>
+                <span v-else class="text-caption font-weight-medium">{{ r.item }}</span>
               </td>
               <td v-if="type !== 'transfer'" class="text-caption">
                 <span v-if="type === 'income' && r.member" class="text-primary">{{ r.member }}</span>
                 <span v-if="r.account" :class="r.member ? 'text-medium-emphasis ml-1' : ''">{{ r.account }}</span>
               </td>
-              <td class="text-right font-weight-bold" :style="`color:${cfg.colorHex}`">
+              <td class="text-right text-caption font-weight-bold" :style="`color:${cfg.colorHex}`" style="white-space:nowrap">
                 {{ cfg.sign !== '⇄' ? cfg.sign : '' }}{{ Math.abs(r.amount).toLocaleString() }}
               </td>
-              <td class="text-caption text-medium-emphasis">{{ r.remark || '-' }}</td>
+              <td class="text-caption text-medium-emphasis d-none d-sm-table-cell">{{ r.remark || '-' }}</td>
               <td class="text-center">
                 <v-btn icon size="x-small" variant="text" :color="cfg.color" @click.stop="handleEditClick(r)">
                   <v-icon size="16">mdi-pencil</v-icon>
@@ -73,7 +73,7 @@
       </div>
 
       <!-- Pagination -->
-      <div v-if="totalPages > 1" class="d-flex justify-space-between align-center px-4 py-2" style="border-top:1px solid rgba(0,0,0,0.08);background:#f8fafc">
+      <div v-if="totalPages > 1" class="d-flex justify-space-between align-center px-3 py-2" style="border-top:1px solid rgba(0,0,0,0.08);background:#f8fafc">
         <v-btn icon size="x-small" variant="text" :disabled="page <= 1" @click="page--">
           <v-icon>mdi-chevron-left</v-icon>
         </v-btn>

@@ -5,9 +5,9 @@
     </div>
     <div v-else>
       <!-- 標題列 + 年月選擇 -->
-      <div class="d-flex flex-wrap justify-space-between align-center mb-6 ga-3">
-        <h3 class="text-h6 font-weight-bold d-flex align-center ga-2">
-          <v-icon color="primary">mdi-wallet</v-icon>
+      <div class="d-flex flex-wrap justify-space-between align-center mb-4 ga-2">
+        <h3 class="text-body-1 text-sm-h6 font-weight-bold d-flex align-center ga-2">
+          <v-icon color="primary" size="20">mdi-wallet</v-icon>
           {{ toMinguoYear(selectedYear) }}年 {{ selectedMonth }}月 收支月報表
         </h3>
         <div class="d-flex ga-2">
@@ -19,7 +19,7 @@
             density="compact"
             variant="outlined"
             hide-details
-            style="min-width:120px"
+            style="min-width:100px"
           />
           <v-select
             v-model="selectedMonth"
@@ -29,55 +29,55 @@
             density="compact"
             variant="outlined"
             hide-details
-            style="min-width:100px"
+            style="min-width:90px"
           />
         </div>
       </div>
 
       <!-- 統計卡片 -->
-      <v-row class="mb-6">
-        <v-col cols="12" md="4">
+      <v-row class="mb-4" dense>
+        <v-col cols="12" sm="4">
           <v-card color="green-lighten-5" elevation="0" rounded="lg">
-            <v-card-text class="text-center">
-              <div class="text-body-2 text-medium-emphasis mb-1">本月合計收入</div>
-              <div class="text-h6 font-weight-bold text-success">NT$ {{ Math.round(totalIncome).toLocaleString() }}</div>
-              <v-icon color="success" class="mt-1">mdi-trending-up</v-icon>
+            <v-card-text class="text-center pa-3">
+              <div class="text-caption text-medium-emphasis mb-1">本月合計收入</div>
+              <div class="text-body-1 text-sm-h6 font-weight-bold text-success">NT$ {{ Math.round(totalIncome).toLocaleString() }}</div>
+              <v-icon color="success" size="18" class="mt-1">mdi-trending-up</v-icon>
             </v-card-text>
           </v-card>
         </v-col>
-        <v-col cols="12" md="4">
+        <v-col cols="12" sm="4">
           <v-card color="red-lighten-5" elevation="0" rounded="lg">
-            <v-card-text class="text-center">
-              <div class="text-body-2 text-medium-emphasis mb-1">本月合計支出</div>
-              <div class="text-h6 font-weight-bold text-error">NT$ {{ Math.round(totalExpense).toLocaleString() }}</div>
-              <v-icon color="error" class="mt-1">mdi-trending-down</v-icon>
+            <v-card-text class="text-center pa-3">
+              <div class="text-caption text-medium-emphasis mb-1">本月合計支出</div>
+              <div class="text-body-1 text-sm-h6 font-weight-bold text-error">NT$ {{ Math.round(totalExpense).toLocaleString() }}</div>
+              <v-icon color="error" size="18" class="mt-1">mdi-trending-down</v-icon>
             </v-card-text>
           </v-card>
         </v-col>
-        <v-col cols="12" md="4">
+        <v-col cols="12" sm="4">
           <v-card color="primary" elevation="0" rounded="lg">
-            <v-card-text class="text-center">
-              <div class="text-body-2 mb-1" style="color:rgba(255,255,255,0.8)">本月收支餘額</div>
-              <div class="text-h6 font-weight-bold text-white">NT$ {{ Math.round(balance).toLocaleString() }}</div>
-              <v-icon color="white" class="mt-1">mdi-wallet</v-icon>
+            <v-card-text class="text-center pa-3">
+              <div class="text-caption mb-1" style="color:rgba(255,255,255,0.8)">本月收支餘額</div>
+              <div class="text-body-1 text-sm-h6 font-weight-bold text-white">NT$ {{ Math.round(balance).toLocaleString() }}</div>
+              <v-icon color="white" size="18" class="mt-1">mdi-wallet</v-icon>
             </v-card-text>
           </v-card>
         </v-col>
       </v-row>
 
       <!-- 收支明細表格 -->
-      <v-row>
+      <v-row dense>
         <!-- 收入 -->
         <v-col cols="12" md="6">
           <v-card elevation="1" rounded="lg">
-            <v-card-title class="text-success text-body-1 font-weight-bold pb-0">收入明細表</v-card-title>
-            <v-divider color="success" thickness="2" class="mx-4" />
+            <v-card-title class="text-success text-body-2 font-weight-bold pb-0 pa-3">收入明細表</v-card-title>
+            <v-divider color="success" thickness="2" class="mx-3" />
             <v-table density="compact">
               <thead>
                 <tr>
-                  <th>類別</th>
-                  <th>項目名稱</th>
-                  <th class="text-right">月計</th>
+                  <th class="text-caption">類別</th>
+                  <th class="text-caption">項目名稱</th>
+                  <th class="text-right text-caption">月計</th>
                 </tr>
               </thead>
               <tbody>
@@ -91,8 +91,8 @@
                   @click="detailView = group"
                 >
                   <td class="text-caption text-success font-weight-bold">{{ group.category }}</td>
-                  <td class="font-weight-medium">{{ group.name }}</td>
-                  <td class="text-right font-weight-bold text-success">{{ Math.round(group.total).toLocaleString() }}</td>
+                  <td class="text-body-2">{{ group.name }}</td>
+                  <td class="text-right text-body-2 font-weight-bold text-success">{{ Math.round(group.total).toLocaleString() }}</td>
                 </tr>
               </tbody>
             </v-table>
@@ -102,14 +102,14 @@
         <!-- 支出 -->
         <v-col cols="12" md="6">
           <v-card elevation="1" rounded="lg">
-            <v-card-title class="text-error text-body-1 font-weight-bold pb-0">支出明細表</v-card-title>
-            <v-divider color="error" thickness="2" class="mx-4" />
+            <v-card-title class="text-error text-body-2 font-weight-bold pb-0 pa-3">支出明細表</v-card-title>
+            <v-divider color="error" thickness="2" class="mx-3" />
             <v-table density="compact">
               <thead>
                 <tr>
-                  <th>類別</th>
-                  <th>項目名稱</th>
-                  <th class="text-right">月計</th>
+                  <th class="text-caption">類別</th>
+                  <th class="text-caption">項目名稱</th>
+                  <th class="text-right text-caption">月計</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,8 +123,8 @@
                   @click="detailView = group"
                 >
                   <td class="text-caption text-error font-weight-bold">{{ group.category }}</td>
-                  <td class="font-weight-medium">{{ group.name }}</td>
-                  <td class="text-right font-weight-bold text-error">{{ Math.round(group.total).toLocaleString() }}</td>
+                  <td class="text-body-2">{{ group.name }}</td>
+                  <td class="text-right text-body-2 font-weight-bold text-error">{{ Math.round(group.total).toLocaleString() }}</td>
                 </tr>
               </tbody>
             </v-table>
@@ -133,12 +133,12 @@
       </v-row>
 
       <!-- 明細 Dialog -->
-      <v-dialog v-model="showDetail" max-width="800" scrollable>
+      <v-dialog v-model="showDetail" :max-width="xs ? undefined : 800" :fullscreen="xs" scrollable>
         <v-card v-if="detailView">
-          <v-card-title class="bg-grey-lighten-4 pa-4">
+          <v-card-title class="bg-grey-lighten-4 pa-3 pa-sm-4">
             <div class="text-caption text-medium-emphasis">{{ toMinguoYear(selectedYear) }}年 {{ selectedMonth }}月 淨收支</div>
-            <div class="text-h6 font-weight-bold">NT$ {{ Math.round(balance).toLocaleString() }}</div>
-            <div class="text-subtitle-1 font-weight-bold">{{ detailView.name }} 明細</div>
+            <div class="text-body-1 font-weight-bold">NT$ {{ Math.round(balance).toLocaleString() }}</div>
+            <div class="text-subtitle-2 font-weight-bold">{{ detailView.name }} 明細</div>
             <div class="text-body-2 text-medium-emphasis">
               本月認列合計：
               <strong :class="detailView.type === 'income' ? 'text-success' : 'text-error'">
@@ -146,44 +146,42 @@
               </strong>
             </div>
           </v-card-title>
-          <v-card-text class="pa-4">
-            <v-table density="compact" class="text-body-2">
-              <thead>
-                <tr>
-                  <th>原始日期</th>
-                  <th v-if="detailView.type === 'income'">社友</th>
-                  <th class="text-right">本月認列額</th>
-                  <th>類型/區間</th>
-                  <th>備註</th>
-                  <th style="width:40px"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(record, i) in detailView.records" :key="record.id || i">
-                  <td>{{ toMinguoDate(record.date) }}</td>
-                  <td v-if="detailView.type === 'income'" class="font-weight-medium">{{ record.member || '-' }}</td>
-                  <td class="text-right font-weight-bold" :class="detailView.type === 'income' ? 'text-success' : 'text-error'">
-                    NT$ {{ Math.round(record.displayAmount).toLocaleString() }}
-                  </td>
-                  <td>
-                    <div class="d-flex flex-column ga-1">
-                      <span class="text-caption text-medium-emphasis">{{ record.isAllocated ? '平攤認列' : '全額認列' }}</span>
-                      <v-chip v-if="record.isAllocated" size="x-small" color="success" variant="tonal">
-                        {{ record.periodNote.replace('(', '').replace(' 平攤)', '') }}
-                      </v-chip>
-                    </div>
-                  </td>
-                  <td class="text-caption" style="max-width:150px">{{ record.remark || '-' }}</td>
-                  <td>
-                    <v-btn icon size="x-small" variant="text" color="primary" @click="onEditRecord(record)">
-                      <v-icon size="16">mdi-pencil</v-icon>
-                    </v-btn>
-                  </td>
-                </tr>
-              </tbody>
-            </v-table>
+          <v-card-text class="pa-2 pa-sm-4">
+            <div style="overflow-x:auto">
+              <v-table density="compact" class="text-body-2">
+                <thead>
+                  <tr>
+                    <th class="text-caption">日期</th>
+                    <th v-if="detailView.type === 'income'" class="text-caption">社友</th>
+                    <th class="text-right text-caption">認列額</th>
+                    <th class="text-caption">類型</th>
+                    <th class="text-caption">備註</th>
+                    <th style="width:40px"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(record, i) in detailView.records" :key="record.id || i">
+                    <td class="text-caption">{{ toMinguoDate(record.date) }}</td>
+                    <td v-if="detailView.type === 'income'" class="text-caption font-weight-medium">{{ record.member || '-' }}</td>
+                    <td class="text-right text-caption font-weight-bold" :class="detailView.type === 'income' ? 'text-success' : 'text-error'">
+                      {{ Math.round(record.displayAmount).toLocaleString() }}
+                    </td>
+                    <td>
+                      <v-chip v-if="record.isAllocated" size="x-small" color="success" variant="tonal">平攤</v-chip>
+                      <span v-else class="text-caption text-medium-emphasis">全額</span>
+                    </td>
+                    <td class="text-caption" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ record.remark || '-' }}</td>
+                    <td>
+                      <v-btn icon size="x-small" variant="text" color="primary" @click="onEditRecord(record)">
+                        <v-icon size="16">mdi-pencil</v-icon>
+                      </v-btn>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </div>
           </v-card-text>
-          <v-card-actions class="bg-grey-lighten-4 justify-end">
+          <v-card-actions class="bg-grey-lighten-4 justify-end pa-3">
             <v-btn color="primary" variant="flat" @click="detailView = null">關閉視窗</v-btn>
           </v-card-actions>
         </v-card>
@@ -194,6 +192,9 @@
 
 <script setup>
 import { ref, computed, inject } from 'vue'
+import { useDisplay } from 'vuetify'
+
+const { xs } = useDisplay()
 
 const records = inject('records')
 const loading = inject('loading')

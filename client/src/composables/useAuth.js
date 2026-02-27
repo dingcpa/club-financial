@@ -8,6 +8,7 @@ const user = ref(JSON.parse(localStorage.getItem(USER_KEY) || 'null'))
 
 export function useAuth() {
     const isAuthenticated = computed(() => !!token.value)
+    const isAdmin = computed(() => user.value?.role === 'admin')
 
     async function login(username, password) {
         const res = await fetch('/api/auth/login', {
@@ -21,7 +22,7 @@ export function useAuth() {
         }
         const data = await res.json()
         token.value = data.token
-        user.value = { displayName: data.displayName, username }
+        user.value = { displayName: data.displayName, username, role: data.role }
         localStorage.setItem(TOKEN_KEY, data.token)
         localStorage.setItem(USER_KEY, JSON.stringify(user.value))
     }
@@ -35,5 +36,5 @@ export function useAuth() {
 
     function getToken() { return token.value }
 
-    return { isAuthenticated, user, token, login, logout, getToken }
+    return { isAuthenticated, isAdmin, user, token, login, logout, getToken }
 }

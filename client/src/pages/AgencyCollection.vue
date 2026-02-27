@@ -5,30 +5,30 @@
     </div>
     <div v-else>
       <!-- Header -->
-      <v-card elevation="1" class="mb-6 pa-4">
-        <div class="d-flex justify-space-between align-center">
-          <div class="d-flex align-center ga-3">
-            <v-icon color="primary" size="28">mdi-hand-coin</v-icon>
+      <v-card elevation="1" class="mb-4 pa-3 pa-sm-4">
+        <div class="d-flex flex-wrap justify-space-between align-center ga-2">
+          <div class="d-flex align-center ga-2">
+            <v-icon color="primary" size="24">mdi-hand-coin</v-icon>
             <div>
-              <div class="text-h6 font-weight-bold">代收代付專區</div>
+              <div class="text-body-1 font-weight-bold">代收代付專區</div>
               <div class="text-caption text-medium-emphasis">管理社友間的代收款項，不計入社團正式收支</div>
             </div>
           </div>
-          <v-btn :color="showForm ? 'grey' : 'primary'" @click="showForm = !showForm" prepend-icon="mdi-plus">
+          <v-btn :color="showForm ? 'grey' : 'primary'" size="small" @click="showForm = !showForm" prepend-icon="mdi-plus">
             {{ showForm ? '取消' : '新增代收項目' }}
           </v-btn>
         </div>
       </v-card>
 
       <!-- Create Form -->
-      <v-card v-if="showForm" elevation="1" border="primary sm" class="mb-6 pa-4">
-        <div class="d-flex align-center ga-2 mb-4">
+      <v-card v-if="showForm" elevation="1" border="primary sm" class="mb-4 pa-3 pa-sm-4">
+        <div class="d-flex align-center ga-2 mb-3">
           <v-icon color="primary">mdi-plus</v-icon>
-          <span class="font-weight-bold text-subtitle-1">建立新的代收項目</span>
+          <span class="font-weight-bold text-body-2">建立新的代收項目</span>
         </div>
 
-        <v-row>
-          <v-col cols="12" md="6">
+        <v-row dense>
+          <v-col cols="12" sm="6">
             <v-text-field
               v-model="formData.title"
               label="項目名稱"
@@ -38,7 +38,7 @@
               required
             />
           </v-col>
-          <v-col cols="12" md="6">
+          <v-col cols="12" sm="6">
             <div class="d-flex ga-2">
               <v-text-field
                 v-model="formData.defaultAmount"
@@ -57,7 +57,7 @@
                 class="mt-1"
                 @click="applyDefaultToAll"
               >
-                套用至全部
+                套用全部
               </v-btn>
             </div>
           </v-col>
@@ -72,20 +72,20 @@
           class="mb-2"
         />
 
-        <div class="mb-2">
+        <div class="mb-3">
           <div class="d-flex justify-space-between align-center mb-2">
-            <span class="text-body-2 font-weight-medium">選擇應收社友 <span class="text-error">*</span></span>
+            <span class="text-caption font-weight-medium">選擇應收社友 <span class="text-error">*</span></span>
             <div class="d-flex ga-1">
               <v-btn size="x-small" variant="tonal" color="grey" @click="selectAllMembers">全選</v-btn>
               <v-btn size="x-small" variant="tonal" color="grey" @click="clearAllMembers">清除</v-btn>
             </div>
           </div>
 
-          <div style="max-height:300px;overflow-y:auto;border:1px solid rgba(0,0,0,0.12);border-radius:8px;padding:8px;background:#f8fafc">
+          <div style="max-height:260px;overflow-y:auto;border:1px solid rgba(0,0,0,0.12);border-radius:8px;padding:8px;background:#f8fafc">
             <div
               v-for="m in members"
               :key="m.id"
-              class="d-flex align-center ga-3 pa-2 mb-1 rounded"
+              class="d-flex align-center ga-2 pa-1 mb-1 rounded"
               :style="isMemberSelected(m.name)
                 ? 'border:1px solid #4f46e5;background:white'
                 : 'border:1px solid transparent'"
@@ -98,7 +98,7 @@
                 color="primary"
                 style="flex:0"
               />
-              <span class="flex-grow-1" :class="isMemberSelected(m.name) ? 'text-primary font-weight-bold' : ''">
+              <span class="flex-grow-1 text-caption" :class="isMemberSelected(m.name) ? 'text-primary font-weight-bold' : ''">
                 {{ m.name }}
                 <span v-if="m.nickname" class="text-caption text-medium-emphasis ml-1">({{ m.nickname }})</span>
               </span>
@@ -112,7 +112,7 @@
                   variant="outlined"
                   hide-details
                   min="0"
-                  style="width:90px"
+                  style="width:80px"
                 />
               </div>
             </div>
@@ -124,17 +124,17 @@
           </div>
         </div>
 
-        <v-btn color="primary" block @click="handleCreate">建立代收項目</v-btn>
+        <v-btn color="primary" block size="small" @click="handleCreate">建立代收項目</v-btn>
       </v-card>
 
       <!-- Open Collections -->
-      <v-card v-if="openCollections.length > 0" elevation="1" class="mb-6 pa-4">
-        <div class="d-flex align-center ga-2 mb-4">
+      <v-card v-if="openCollections.length > 0" elevation="1" class="mb-4 pa-3 pa-sm-4">
+        <div class="d-flex align-center ga-2 mb-3">
           <v-icon color="warning">mdi-clock-outline</v-icon>
-          <span class="font-weight-bold text-subtitle-1">進行中 ({{ openCollections.length }})</span>
+          <span class="font-weight-bold text-body-2">進行中 ({{ openCollections.length }})</span>
         </div>
 
-        <div class="d-flex flex-column ga-4">
+        <div class="d-flex flex-column ga-3">
           <div
             v-for="col in openCollections"
             :key="col.id"
@@ -142,29 +142,29 @@
           >
             <!-- Card Header -->
             <div
-              class="pa-4 d-flex justify-space-between align-center"
+              class="pa-3 d-flex justify-space-between align-center"
               style="cursor:pointer"
               @click="toggleExpand(col.id)"
             >
-              <div>
-                <div class="font-weight-bold text-body-1 mb-1">{{ col.title }}</div>
+              <div class="flex-grow-1 mr-2">
+                <div class="font-weight-bold text-body-2 mb-1">{{ col.title }}</div>
                 <div class="text-caption text-medium-emphasis">
-                  建立於 {{ col.createdDate }}{{ col.remark ? ` · ${col.remark}` : '' }}
+                  {{ col.createdDate }}{{ col.remark ? ` · ${col.remark}` : '' }}
                 </div>
               </div>
-              <div class="d-flex align-center ga-4">
+              <div class="d-flex align-center ga-2">
                 <div class="text-right">
-                  <div class="font-weight-bold text-primary">{{ col.paidMembers.length }} / {{ getTargetMemberNames(col).length }} 人</div>
+                  <div class="text-caption font-weight-bold text-primary">{{ col.paidMembers.length }} / {{ getTargetMemberNames(col).length }} 人</div>
                   <div class="text-caption text-medium-emphasis">
-                    NT$ {{ col.paidMembers.reduce((s, p) => s + p.amount, 0).toLocaleString() }} / {{ getTotalTargetAmount(col).toLocaleString() }}
+                    NT$ {{ col.paidMembers.reduce((s, p) => s + p.amount, 0).toLocaleString() }}
                   </div>
                 </div>
-                <v-icon>{{ expandedId === col.id ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                <v-icon size="20">{{ expandedId === col.id ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
               </div>
             </div>
 
             <!-- Progress Bar -->
-            <div class="px-4" :class="expandedId === col.id ? '' : 'pb-4'">
+            <div class="px-3" :class="expandedId === col.id ? '' : 'pb-3'">
               <v-progress-linear
                 :model-value="getProgress(col)"
                 :color="getProgress(col) === 100 ? 'success' : 'primary'"
@@ -175,11 +175,11 @@
             </div>
 
             <!-- Expanded Content -->
-            <div v-if="expandedId === col.id" class="pa-4" style="border-top:1px solid #fcd34d">
+            <div v-if="expandedId === col.id" class="pa-3" style="border-top:1px solid #fcd34d">
               <!-- Unpaid -->
-              <div v-if="getUnpaidMembers(col).length > 0" class="mb-4">
-                <div class="d-flex align-center ga-1 mb-2 text-warning font-weight-bold text-body-2">
-                  <v-icon color="warning" size="16">mdi-alert-circle</v-icon>
+              <div v-if="getUnpaidMembers(col).length > 0" class="mb-3">
+                <div class="d-flex align-center ga-1 mb-2 text-warning font-weight-bold text-caption">
+                  <v-icon color="warning" size="14">mdi-alert-circle</v-icon>
                   未收款 ({{ getUnpaidMembers(col).length }})
                 </div>
                 <div class="d-flex flex-column ga-2">
@@ -189,9 +189,9 @@
                     class="d-flex justify-space-between align-center pa-2 rounded"
                     style="border:1px solid #e2e8f0;background:white"
                   >
-                    <span class="font-weight-medium">{{ name }}</span>
-                    <div class="d-flex align-center ga-3">
-                      <span class="text-medium-emphasis text-body-2">NT$ {{ getTargetMemberInfo(col, name)?.amount?.toLocaleString() ?? 0 }}</span>
+                    <span class="text-caption font-weight-medium">{{ name }}</span>
+                    <div class="d-flex align-center ga-2">
+                      <span class="text-caption text-medium-emphasis">NT$ {{ getTargetMemberInfo(col, name)?.amount?.toLocaleString() ?? 0 }}</span>
                       <v-btn size="x-small" color="success" @click="handlePayment(col.id, name, getTargetMemberInfo(col, name)?.amount || 0)" prepend-icon="mdi-check">已收</v-btn>
                     </div>
                   </div>
@@ -199,9 +199,9 @@
               </div>
 
               <!-- Paid -->
-              <div v-if="col.paidMembers.length > 0" class="mb-4">
-                <div class="d-flex align-center ga-1 mb-2 text-success font-weight-bold text-body-2">
-                  <v-icon color="success" size="16">mdi-check-circle</v-icon>
+              <div v-if="col.paidMembers.length > 0" class="mb-3">
+                <div class="d-flex align-center ga-1 mb-2 text-success font-weight-bold text-caption">
+                  <v-icon color="success" size="14">mdi-check-circle</v-icon>
                   已收款 ({{ col.paidMembers.length }})
                 </div>
                 <div class="d-flex flex-column ga-2">
@@ -211,15 +211,15 @@
                     class="d-flex justify-space-between align-center pa-2 rounded"
                     style="background:#dcfce7"
                   >
-                    <div class="d-flex align-center ga-2">
-                      <v-icon color="success" size="16">mdi-check-circle</v-icon>
-                      <span class="font-weight-medium">{{ p.memberName }}</span>
+                    <div class="d-flex align-center ga-1">
+                      <v-icon color="success" size="14">mdi-check-circle</v-icon>
+                      <span class="text-caption font-weight-medium">{{ p.memberName }}</span>
                       <span class="text-caption text-medium-emphasis">{{ p.date }}</span>
                     </div>
-                    <div class="d-flex align-center ga-3">
-                      <span class="font-weight-bold text-success">NT$ {{ p.amount.toLocaleString() }}</span>
+                    <div class="d-flex align-center ga-2">
+                      <span class="text-caption font-weight-bold text-success">NT$ {{ p.amount.toLocaleString() }}</span>
                       <v-btn icon size="x-small" variant="tonal" color="grey" @click="confirmRemovePayment(col.id, p.memberName)">
-                        <v-icon size="14">mdi-close</v-icon>
+                        <v-icon size="12">mdi-close</v-icon>
                       </v-btn>
                     </div>
                   </div>
@@ -227,16 +227,17 @@
               </div>
 
               <!-- Actions -->
-              <div class="d-flex ga-2 pt-4" style="border-top:1px dashed #fcd34d">
+              <div class="d-flex flex-wrap ga-2 pt-3" style="border-top:1px dashed #fcd34d">
                 <v-btn
                   v-if="col.paidMembers.length === getTargetMemberNames(col).length && getTargetMemberNames(col).length > 0"
                   color="success"
+                  size="small"
                   prepend-icon="mdi-check-circle"
                   @click="openCloseDialog(col)"
                 >
                   結案
                 </v-btn>
-                <v-btn color="error" prepend-icon="mdi-trash-can" @click="handleDelete(col.id)">刪除</v-btn>
+                <v-btn color="error" size="small" prepend-icon="mdi-trash-can" @click="handleDelete(col.id)">刪除</v-btn>
               </div>
             </div>
           </div>
@@ -244,28 +245,28 @@
       </v-card>
 
       <!-- Closed Collections -->
-      <v-card v-if="closedCollections.length > 0" elevation="1" class="pa-4">
-        <div class="d-flex align-center ga-2 mb-4">
+      <v-card v-if="closedCollections.length > 0" elevation="1" class="pa-3 pa-sm-4">
+        <div class="d-flex align-center ga-2 mb-3">
           <v-icon color="success">mdi-check-circle</v-icon>
-          <span class="font-weight-bold text-subtitle-1">已結案 ({{ closedCollections.length }})</span>
+          <span class="font-weight-bold text-body-2">已結案 ({{ closedCollections.length }})</span>
         </div>
         <div class="d-flex flex-column ga-3">
           <div
             v-for="col in closedCollections"
             :key="col.id"
-            class="d-flex justify-space-between align-center pa-3 rounded"
+            class="d-flex justify-space-between align-center pa-2 rounded"
             style="border:1px solid #bbf7d0;background:#f0fdf4"
           >
-            <div>
-              <div class="font-weight-bold mb-1">{{ col.title }}</div>
+            <div class="flex-grow-1 mr-2">
+              <div class="text-caption font-weight-bold mb-1">{{ col.title }}</div>
               <div class="text-caption text-medium-emphasis">
-                結案日期：{{ col.closedDate }} · 共收 {{ col.paidMembers.length }} 人{{ col.closedRemark ? ` · ${col.closedRemark}` : '' }}
+                {{ col.closedDate }} · {{ col.paidMembers.length }} 人{{ col.closedRemark ? ` · ${col.closedRemark}` : '' }}
               </div>
             </div>
-            <div class="d-flex align-center ga-4">
-              <span class="font-weight-bold text-success">NT$ {{ (col.closedAmount || 0).toLocaleString() }}</span>
+            <div class="d-flex align-center ga-2">
+              <span class="text-caption font-weight-bold text-success">NT$ {{ (col.closedAmount || 0).toLocaleString() }}</span>
               <v-btn icon size="x-small" variant="tonal" color="grey" @click="handleDelete(col.id)">
-                <v-icon size="16">mdi-trash-can</v-icon>
+                <v-icon size="14">mdi-trash-can</v-icon>
               </v-btn>
             </div>
           </div>
@@ -273,17 +274,17 @@
       </v-card>
 
       <!-- Empty State -->
-      <v-card v-if="collections.length === 0 && !showForm" elevation="1" class="pa-12 text-center">
-        <v-icon size="48" color="grey-lighten-2" class="mb-4">mdi-hand-coin</v-icon>
-        <div class="text-medium-emphasis mb-4">尚無代收代付項目</div>
+      <v-card v-if="collections.length === 0 && !showForm" elevation="1" class="pa-8 text-center">
+        <v-icon size="40" color="grey-lighten-2" class="mb-3">mdi-hand-coin</v-icon>
+        <div class="text-medium-emphasis mb-3">尚無代收代付項目</div>
         <v-btn color="primary" prepend-icon="mdi-plus" @click="showForm = true">建立第一個代收項目</v-btn>
       </v-card>
     </div>
 
     <!-- Close Dialog -->
-    <v-dialog v-model="closeDialog.show" max-width="400">
-      <v-card class="pa-4">
-        <div class="text-subtitle-1 font-weight-bold mb-4">結案備註</div>
+    <v-dialog v-model="closeDialog.show" :max-width="xs ? undefined : 400" :fullscreen="xs">
+      <v-card class="pa-3 pa-sm-4">
+        <div class="text-subtitle-2 font-weight-bold mb-3">結案備註</div>
         <v-text-field
           v-model="closeDialog.remark"
           label="結案備註（例如：已轉交給XXX）"
@@ -302,7 +303,10 @@
 
 <script setup>
 import { ref, computed, inject, onMounted } from 'vue'
+import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
+
+const { xs } = useDisplay()
 
 const API_URL = '/api/agency-collections'
 

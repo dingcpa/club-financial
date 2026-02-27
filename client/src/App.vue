@@ -95,8 +95,8 @@
           />
         </v-list-group>
 
-        <!-- 系統管理 -->
-        <v-list-group value="admin">
+        <!-- 系統管理（僅管理員可見） -->
+        <v-list-group v-if="isAdmin" value="admin">
           <template #activator="{ props }">
             <v-list-item v-bind="props" prepend-icon="mdi-cog" title="系統管理" />
           </template>
@@ -164,7 +164,7 @@ import RecordListPanel from './pages/RecordListPanel.vue'
 import UserManagement from './pages/UserManagement.vue'
 
 // ----- Auth -----
-const { isAuthenticated, user, logout } = useAuth()
+const { isAuthenticated, isAdmin, user, logout } = useAuth()
 const { smAndDown } = useDisplay()
 const mobile = smAndDown
 
@@ -221,14 +221,19 @@ const pageMap = {
 }
 const currentPage = computed(() => pageMap[activeTab.value] || Summary)
 
+// 需要管理員的頁面清單
+const ADMIN_TABS = ['user-management']
+
 // ----- 導覽 -----
 function navigate(tab) {
+  if (ADMIN_TABS.includes(tab) && !isAdmin.value) return
   activeTab.value = tab
   editingRecord.value = null
   if (mobile.value) drawer.value = false
 }
 
 function setActiveTab(tab) {
+  if (ADMIN_TABS.includes(tab) && !isAdmin.value) return
   activeTab.value = tab
 }
 
