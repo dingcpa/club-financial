@@ -17,13 +17,18 @@ if (require('fs').existsSync(clientDist)) {
     app.use(express.static(clientDist));
 }
 
-// ─── Helper ────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────
 function parseCollection(row) {
     return {
         ...row,
+        closedAmount:  parseFloat(row.closedAmount) || null,
         targetMembers: JSON.parse(row.targetMembers || '[]'),
         paidMembers:   JSON.parse(row.paidMembers   || '[]'),
     };
+}
+
+function parseFinance(row) {
+    return { ...row, amount: parseFloat(row.amount) || 0 };
 }
 
 // ─── Members ───────────────────────────────────────────────
@@ -91,7 +96,7 @@ app.delete('/api/members/:id', async (req, res) => {
 app.get('/api/dues-settings', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM dues_settings');
-        res.json(rows);
+        res.json(rows.map(r => ({ ...r, standardAmount: parseFloat(r.standardAmount) || 0 })));
     } catch (e) {
         res.status(500).json({ error: 'Failed to read dues settings' });
     }
@@ -149,7 +154,7 @@ app.delete('/api/dues-settings/:category', async (req, res) => {
 app.get('/api/finance', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM finance ORDER BY date DESC');
-        res.json(rows);
+        res.json(rows.map(parseFinance));
     } catch (e) {
         res.status(500).json({ error: 'Failed to read data' });
     }
