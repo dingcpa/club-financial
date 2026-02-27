@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { apiFetch } from './apiFetch.js'
 
 const API_URL = '/api/dues-settings'
 
@@ -22,7 +23,7 @@ export function useDues() {
 
   async function fetchDuesSettings() {
     try {
-      const res = await fetch(API_URL)
+      const res = await apiFetch(API_URL)
       const data = await res.json()
       duesSettings.value = data.length > 0 ? data : DEFAULT_DUES
     } catch (e) {
@@ -31,9 +32,8 @@ export function useDues() {
   }
 
   async function addDuesSetting(setting) {
-    const res = await fetch(API_URL, {
+    const res = await apiFetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(setting)
     })
     const saved = await res.json()
@@ -42,9 +42,8 @@ export function useDues() {
   }
 
   async function updateDuesSetting(oldCategory, setting) {
-    const res = await fetch(`${API_URL}/${encodeURIComponent(oldCategory)}`, {
+    const res = await apiFetch(`${API_URL}/${encodeURIComponent(oldCategory)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(setting)
     })
     const updated = await res.json()
@@ -55,7 +54,7 @@ export function useDues() {
   }
 
   async function deleteDuesSetting(category) {
-    await fetch(`${API_URL}/${encodeURIComponent(category)}`, { method: 'DELETE' })
+    await apiFetch(`${API_URL}/${encodeURIComponent(category)}`, { method: 'DELETE' })
     duesSettings.value = duesSettings.value.filter(d => d.category !== category)
   }
 

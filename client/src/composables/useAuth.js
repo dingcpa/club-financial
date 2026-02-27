@@ -1,0 +1,39 @@
+import { ref, computed } from 'vue'
+
+const TOKEN_KEY = 'cf_token'
+const USER_KEY = 'cf_user'
+
+const token = ref(localStorage.getItem(TOKEN_KEY) || '')
+const user = ref(JSON.parse(localStorage.getItem(USER_KEY) || 'null'))
+
+export function useAuth() {
+    const isAuthenticated = computed(() => !!token.value)
+
+    async function login(username, password) {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        })
+        if (!res.ok) {
+            const err = await res.json()
+            throw new Error(err.error || '登入失敗')
+        }
+        const data = await res.json()
+        token.value = data.token
+        user.value = { displayName: data.displayName, username }
+        localStorage.setItem(TOKEN_KEY, data.token)
+        localStorage.setItem(USER_KEY, JSON.stringify(user.value))
+    }
+
+    function logout() {
+        token.value = ''
+        user.value = null
+        localStorage.removeItem(TOKEN_KEY)
+        localStorage.removeItem(USER_KEY)
+    }
+
+    function getToken() { return token.value }
+
+    return { isAuthenticated, user, token, login, logout, getToken }
+}

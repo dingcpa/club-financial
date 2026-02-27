@@ -6,6 +6,7 @@
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "start": "node server/index.js",
+    "create-user": "node server/seed-user.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,10 +14,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "body-parser": "^2.2.2",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.18.2"
   }
 }

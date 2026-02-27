@@ -1,15 +1,27 @@
 <template>
-  <v-app>
-    <!-- 側邊欄 -->
+  <!-- 未登入：顯示登入頁 -->
+  <LoginPage v-if="!isAuthenticated" />
+
+  <!-- 已登入：主應用 -->
+  <v-app v-else>
+    <!-- 手機版 App Bar -->
+    <v-app-bar v-if="mobile" color="primary" elevation="2">
+      <v-app-bar-nav-icon @click="drawer = !drawer" />
+      <v-app-bar-title>社團收支系統</v-app-bar-title>
+      <v-btn icon="mdi-logout" @click="handleLogout" />
+    </v-app-bar>
+
+    <!-- 側邊導覽欄 -->
     <v-navigation-drawer
       v-model="drawer"
-      :rail="rail"
-      permanent
+      :rail="!mobile && rail"
+      :temporary="mobile"
       color="white"
       elevation="2"
     >
-      <!-- Logo 區 -->
+      <!-- Logo 區（桌面版顯示） -->
       <v-list-item
+        v-if="!mobile"
         prepend-icon="mdi-wallet"
         :title="rail ? '' : '社團收支系統'"
         nav
@@ -22,6 +34,15 @@
           />
         </template>
       </v-list-item>
+
+      <!-- 使用者資訊（手機版） -->
+      <v-list-item
+        v-if="mobile"
+        :title="user?.displayName || user?.username"
+        subtitle="已登入"
+        prepend-icon="mdi-account-circle"
+        class="py-3"
+      />
 
       <v-divider />
 
@@ -73,12 +94,45 @@
             @click="navigate(item.tab)"
           />
         </v-list-group>
+
+        <!-- 系統管理 -->
+        <v-list-group value="admin">
+          <template #activator="{ props }">
+            <v-list-item v-bind="props" prepend-icon="mdi-cog" title="系統管理" />
+          </template>
+          <v-list-item
+            v-for="item in adminItems"
+            :key="item.tab"
+            :prepend-icon="item.icon"
+            :title="item.title"
+            :active="activeTab === item.tab"
+            active-color="primary"
+            @click="navigate(item.tab)"
+          />
+        </v-list-group>
       </v-list>
+
+      <!-- 桌面版底部：使用者資訊 + 登出 -->
+      <template v-if="!mobile" #append>
+        <v-divider />
+        <v-list density="compact" nav>
+          <v-list-item
+            :prepend-icon="rail ? 'mdi-account-circle' : 'mdi-account-circle'"
+            :title="rail ? '' : (user?.displayName || user?.username)"
+            :subtitle="rail ? '' : '已登入'"
+          />
+          <v-list-item
+            prepend-icon="mdi-logout"
+            :title="rail ? '' : '登出'"
+            @click="handleLogout"
+          />
+        </v-list>
+      </template>
     </v-navigation-drawer>
 
     <!-- 主內容 -->
     <v-main>
-      <v-container fluid class="pa-4">
+      <v-container fluid class="pa-3 pa-sm-4">
         <component :is="currentPage" />
       </v-container>
     </v-main>
@@ -87,12 +141,15 @@
 
 <script setup>
 import { ref, computed, provide, onMounted } from 'vue'
+import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
 
+import { useAuth } from './composables/useAuth.js'
 import { useFinance } from './composables/useFinance.js'
 import { useMembers } from './composables/useMembers.js'
 import { useDues } from './composables/useDues.js'
 
+import LoginPage from './pages/LoginPage.vue'
 import Summary from './pages/Summary.vue'
 import IncomeForm from './pages/IncomeForm.vue'
 import ExpenseForm from './pages/ExpenseForm.vue'
@@ -104,6 +161,12 @@ import PrepaidExpense from './pages/PrepaidExpense.vue'
 import AccountSummary from './pages/AccountSummary.vue'
 import AgencyCollection from './pages/AgencyCollection.vue'
 import RecordListPanel from './pages/RecordListPanel.vue'
+import UserManagement from './pages/UserManagement.vue'
+
+// ----- Auth -----
+const { isAuthenticated, user, logout } = useAuth()
+const { smAndDown } = useDisplay()
+const mobile = smAndDown
 
 // ----- 狀態 -----
 const drawer = ref(true)
@@ -135,6 +198,9 @@ const transactionItems = [
   { tab: 'transfer', icon: 'mdi-swap-horizontal', title: '新增調撥單' },
   { tab: 'transfer-list', icon: 'mdi-magnify', title: '查詢調撥單' },
 ]
+const adminItems = [
+  { tab: 'user-management', icon: 'mdi-account-key', title: '帳號管理' },
+]
 
 // ----- 頁面對應 -----
 const pageMap = {
@@ -151,6 +217,7 @@ const pageMap = {
   'expense-list': RecordListPanel,
   'transfer': TransferForm,
   'transfer-list': RecordListPanel,
+  'user-management': UserManagement,
 }
 const currentPage = computed(() => pageMap[activeTab.value] || Summary)
 
@@ -158,10 +225,25 @@ const currentPage = computed(() => pageMap[activeTab.value] || Summary)
 function navigate(tab) {
   activeTab.value = tab
   editingRecord.value = null
+  if (mobile.value) drawer.value = false
 }
 
 function setActiveTab(tab) {
   activeTab.value = tab
+}
+
+async function handleLogout() {
+  const result = await Swal.fire({
+    title: '確定要登出？',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#4f46e5',
+    cancelButtonColor: '#6b7280',
+    confirmButtonText: '登出',
+    cancelButtonText: '取消',
+  })
+  if (!result.isConfirmed) return
+  logout()
 }
 
 // ----- 業務 handlers -----
@@ -257,9 +339,12 @@ provide('updateDuesSetting', updateDuesSetting)
 provide('deleteDuesSetting', deleteDuesSetting)
 provide('handleEditClick', handleEditClick)
 provide('handleCancelEdit', handleCancelEdit)
+provide('currentUserId', computed(() => user.value?.id))
 
 // ----- 初始化 -----
 onMounted(() => {
-  Promise.all([fetchRecords(), fetchMembers(), fetchDuesSettings()])
+  if (isAuthenticated.value) {
+    Promise.all([fetchRecords(), fetchMembers(), fetchDuesSettings()])
+  }
 })
 </script>

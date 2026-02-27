@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { apiFetch } from './apiFetch.js'
 
 const API_URL = '/api/members'
 
@@ -9,7 +10,7 @@ export function useMembers() {
   async function fetchMembers() {
     memLoading.value = true
     try {
-      const res = await fetch(API_URL)
+      const res = await apiFetch(API_URL)
       members.value = await res.json()
     } catch (e) {
       console.error('Error fetching members:', e)
@@ -19,9 +20,8 @@ export function useMembers() {
   }
 
   async function addMember(newMember) {
-    const res = await fetch(API_URL, {
+    const res = await apiFetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newMember)
     })
     const saved = await res.json()
@@ -30,9 +30,8 @@ export function useMembers() {
   }
 
   async function updateMember(id, updatedMember) {
-    const res = await fetch(`${API_URL}/${id}`, {
+    const res = await apiFetch(`${API_URL}/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedMember)
     })
     const updated = await res.json()
@@ -41,7 +40,7 @@ export function useMembers() {
   }
 
   async function deleteMember(id) {
-    await fetch(`${API_URL}/${id}`, { method: 'DELETE' })
+    await apiFetch(`${API_URL}/${id}`, { method: 'DELETE' })
     members.value = members.value.filter(m => m.id !== id)
   }
 

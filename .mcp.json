@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "mariadb": {
+      "command": "npx",
+      "args": ["-y", "@benborla29/mcp-server-mysql"],
+      "env": {
+        "MYSQL_HOST": "43.167.238.175",
+        "MYSQL_PORT": "30466",
+        "MYSQL_USER": "root",
+        "MYSQL_PASS": "P5xury6Yf9V3IvTpz21s4Gn0BoENb8q7",
+        "MYSQL_DB": "zeabur"
+      }
+    }
+  }
+}

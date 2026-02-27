@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { apiFetch } from './apiFetch.js'
 
 const API_URL = '/api/finance'
 
@@ -9,7 +10,7 @@ export function useFinance() {
   async function fetchRecords() {
     loading.value = true
     try {
-      const res = await fetch(`${API_URL}?t=${Date.now()}`)
+      const res = await apiFetch(`${API_URL}?t=${Date.now()}`)
       records.value = await res.json()
     } catch (e) {
       console.error('Error fetching records:', e)
@@ -19,9 +20,8 @@ export function useFinance() {
   }
 
   async function addRecord(newRecord) {
-    const res = await fetch(API_URL, {
+    const res = await apiFetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newRecord)
     })
     const saved = await res.json()
@@ -30,9 +30,8 @@ export function useFinance() {
   }
 
   async function addRecordsBatch(newRecords) {
-    const res = await fetch(`${API_URL}/batch`, {
+    const res = await apiFetch(`${API_URL}/batch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newRecords)
     })
     const saved = await res.json()
@@ -41,9 +40,8 @@ export function useFinance() {
   }
 
   async function updateRecord(id, updatedRecord) {
-    const res = await fetch(`${API_URL}/${id}`, {
+    const res = await apiFetch(`${API_URL}/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedRecord)
     })
     const updated = await res.json()
@@ -52,7 +50,7 @@ export function useFinance() {
   }
 
   async function deleteRecord(id) {
-    await fetch(`${API_URL}/${id}`, { method: 'DELETE' })
+    await apiFetch(`${API_URL}/${id}`, { method: 'DELETE' })
     records.value = records.value.filter(r => r.id !== id)
   }
 

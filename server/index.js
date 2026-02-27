@@ -3,7 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { pool, initDB } = require('./db');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -16,6 +20,42 @@ const clientDist = path.join(__dirname, '../client/dist');
 if (require('fs').existsSync(clientDist)) {
     app.use(express.static(clientDist));
 }
+
+// ─── Auth ───────────────────────────────────────────────────
+function authMiddleware(req, res, next) {
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        req.user = jwt.verify(auth.slice(7), JWT_SECRET);
+        next();
+    } catch {
+        res.status(401).json({ error: 'Token 無效或已過期' });
+    }
+}
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const [rows] = await pool.query('SELECT * FROM users WHERE username=?', [username]);
+        if (!rows.length) return res.status(401).json({ error: '帳號或密碼錯誤' });
+        const ok = await bcrypt.compare(password, rows[0].password_hash);
+        if (!ok) return res.status(401).json({ error: '帳號或密碼錯誤' });
+        const token = jwt.sign(
+            { id: rows[0].id, username: rows[0].username, displayName: rows[0].display_name },
+            JWT_SECRET, { expiresIn: '7d' }
+        );
+        res.json({ token, displayName: rows[0].display_name });
+    } catch (e) {
+        res.status(500).json({ error: 'Login failed' });
+    }
+});
+
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+    res.json({ id: req.user.id, username: req.user.username, displayName: req.user.displayName });
+});
+
+// 所有 /api 路由（除 /api/auth/login）均需 token
+app.use('/api', authMiddleware);
 
 // ─── Helpers ───────────────────────────────────────────────
 function parseCollection(row) {
@@ -372,6 +412,65 @@ app.get('/api/debug', async (req, res) => {
         });
     } catch (e) {
         res.status(500).json({ error: 'Debug failed' });
+    }
+});
+
+// ─── Users ─────────────────────────────────────────────────
+app.get('/api/users', authMiddleware, async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            'SELECT id, username, display_name, created_at FROM users ORDER BY created_at ASC'
+        );
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read users' });
+    }
+});
+
+app.post('/api/users', authMiddleware, async (req, res) => {
+    try {
+        const { username, password, displayName } = req.body;
+        if (!username || !password) return res.status(400).json({ error: '帳號與密碼為必填' });
+        const hash = await bcrypt.hash(password, 12);
+        await pool.query(
+            'INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)',
+            [username, hash, displayName || username]
+        );
+        res.status(201).json({ message: '使用者建立成功' });
+    } catch (e) {
+        if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '帳號已存在' });
+        res.status(500).json({ error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/users/:id', authMiddleware, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { password, displayName } = req.body;
+        if (password) {
+            const hash = await bcrypt.hash(password, 12);
+            await pool.query(
+                'UPDATE users SET password_hash=?, display_name=? WHERE id=?',
+                [hash, displayName, id]
+            );
+        } else {
+            await pool.query('UPDATE users SET display_name=? WHERE id=?', [displayName, id]);
+        }
+        res.json({ message: '更新成功' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to update user' });
+    }
+});
+
+app.delete('/api/users/:id', authMiddleware, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        if (id === req.user.id) return res.status(400).json({ error: '不可刪除自己的帳號' });
+        const [result] = await pool.query('DELETE FROM users WHERE id=?', [id]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found' });
+        res.json({ message: '刪除成功' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete user' });
     }
 });
 
