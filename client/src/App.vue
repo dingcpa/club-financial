@@ -140,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, computed, provide, onMounted } from 'vue'
+import { ref, computed, provide, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
 
@@ -347,9 +347,9 @@ provide('handleCancelEdit', handleCancelEdit)
 provide('currentUserId', computed(() => user.value?.id))
 
 // ----- 初始化 -----
-onMounted(() => {
-  if (isAuthenticated.value) {
+watch(isAuthenticated, (val) => {
+  if (val) {
     Promise.all([fetchRecords(), fetchMembers(), fetchDuesSettings()])
   }
-})
+}, { immediate: true })
 </script>
