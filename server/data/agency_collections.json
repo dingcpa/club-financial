@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1771855275736,
+    "title": "test",
+    "targetMembers": [
+      {
+        "name": "test",
+        "amount": 500
+      }
+    ],
+    "paidMembers": [],
+    "status": "open",
+    "createdDate": "2026-02-23",
+    "closedDate": null,
+    "closedAmount": null,
+    "remark": ""
+  }
+]
