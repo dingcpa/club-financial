@@ -14,6 +14,12 @@ const AGENCY_FILE = path.join(__dirname, 'data', 'agency_collections.json');
 app.use(cors());
 app.use(bodyParser.json());
 
+// Serve Vue frontend static files
+const clientDist = path.join(__dirname, '../client/dist');
+if (require('fs').existsSync(clientDist)) {
+    app.use(express.static(clientDist));
+}
+
 // Helper function to read data
 const readData = () => {
     try {
@@ -477,6 +483,16 @@ app.get('/api/debug', (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ error: 'Debug failed' });
+    }
+});
+
+// SPA fallback — serve index.html for non-API routes
+app.get('*', (req, res) => {
+    const indexFile = path.join(__dirname, '../client/dist/index.html');
+    if (require('fs').existsSync(indexFile)) {
+        res.sendFile(indexFile);
+    } else {
+        res.status(404).send('Frontend not built yet');
     }
 });
 

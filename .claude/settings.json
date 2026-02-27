@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init)",
+      "Bash(git checkout -b main)",
+      "Bash(git add CLAUDE.md .gitignore package.json package-lock.json server/ client/)",
+      "Bash(git commit:*)",
+      "Bash(git remote add origin git@github.com:dingcpa/club-financial.git)",
+      "Bash(git push -u origin main)",
+      "Bash(git fetch origin)",
+      "Bash(npm remove react react-dom lucide-react @vitejs/plugin-react eslint-plugin-react-hooks eslint-plugin-react-refresh @types/react @types/react-dom)",
+      "Bash(npm install vue@^3 vuetify@^3 @mdi/font sweetalert2)",
+      "Bash(npm install -D @vitejs/plugin-vue)",
+      "Bash(npm run build)",
+      "Bash(git add .github/ client/src/App.vue client/src/composables/ client/src/main.js client/src/pages/*.vue client/eslint.config.js client/index.html client/package.json client/package-lock.json client/vite.config.js)",
+      "Bash(git add -u client/src/)",
+      "Bash(git push origin main)",
+      "Bash(git add package.json server/index.js)",
+      "Bash(git add -A)"
+    ]
+  }
+}

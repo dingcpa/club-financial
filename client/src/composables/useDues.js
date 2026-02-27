@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const API_URL = 'http://localhost:5000/api/dues-settings'
+const API_URL = '/api/dues-settings'
 
 const DEFAULT_DUES = [
   { category: '1-3月社費', dueDate: '2026-01-01', standardAmount: 16500 },

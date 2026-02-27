@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const API_URL = 'http://localhost:5000/api/finance'
+const API_URL = '/api/finance'
 
 export function useFinance() {
   const records = ref([])

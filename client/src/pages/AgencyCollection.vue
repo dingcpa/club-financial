@@ -304,7 +304,7 @@
 import { ref, computed, inject, onMounted } from 'vue'
 import Swal from 'sweetalert2'
 
-const API_URL = 'http://localhost:5000/api/agency-collections'
+const API_URL = '/api/agency-collections'
 
 const members = inject('members')
 

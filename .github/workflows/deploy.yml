@@ -1,18 +1,9 @@
-name: Deploy to GitHub Pages
+name: Build & Deploy to Zeabur
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -27,26 +18,11 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
 
-      - name: Install dependencies
-        working-directory: client
-        run: npm ci
-
-      - name: Build
-        working-directory: client
+      - name: Build frontend
         run: npm run build
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
         with:
+          name: client-dist
           path: client/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

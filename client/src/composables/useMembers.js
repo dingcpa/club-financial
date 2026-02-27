@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const API_URL = 'http://localhost:5000/api/members'
+const API_URL = '/api/members'
 
 export function useMembers() {
   const members = ref([])
