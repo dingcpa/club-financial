@@ -487,7 +487,7 @@ app.get('/api/debug', (req, res) => {
 });
 
 // SPA fallback — serve index.html for non-API routes
-app.get('*', (req, res) => {
+app.get('/{*path}', (req, res) => {
     const indexFile = path.join(__dirname, '../client/dist/index.html');
     if (require('fs').existsSync(indexFile)) {
         res.sendFile(indexFile);
