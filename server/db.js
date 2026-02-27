@@ -1,0 +1,69 @@
+const mysql = require('mysql2/promise')
+
+const pool = mysql.createPool({
+  host:     process.env.DB_HOST     || '43.167.238.175',
+  port:     parseInt(process.env.DB_PORT) || 30466,
+  user:     process.env.DB_USER     || 'root',
+  password: process.env.DB_PASSWORD || 'P5xury6Yf9V3IvTpz21s4Gn0BoENb8q7',
+  database: process.env.DB_NAME     || 'zeabur',
+  waitForConnections: true,
+  connectionLimit: 10,
+  charset: 'utf8mb4',
+})
+
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS finance (
+      id BIGINT PRIMARY KEY,
+      type VARCHAR(20) NOT NULL,
+      date VARCHAR(20) NOT NULL,
+      item VARCHAR(255) NOT NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      remark TEXT,
+      member VARCHAR(100),
+      account VARCHAR(100),
+      fromAccount VARCHAR(100),
+      toAccount VARCHAR(100),
+      startPeriod VARCHAR(7),
+      endPeriod VARCHAR(7)
+    ) CHARACTER SET utf8mb4
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS members (
+      id BIGINT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      nickname VARCHAR(100),
+      birthday VARCHAR(20),
+      email VARCHAR(200),
+      phone VARCHAR(50),
+      mobile VARCHAR(50),
+      address TEXT,
+      jobTitle1 VARCHAR(100),
+      jobTitle2 VARCHAR(100)
+    ) CHARACTER SET utf8mb4
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dues_settings (
+      category VARCHAR(100) PRIMARY KEY,
+      dueDate VARCHAR(20),
+      standardAmount DECIMAL(12,2)
+    ) CHARACTER SET utf8mb4
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS agency_collections (
+      id BIGINT PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      targetMembers LONGTEXT,
+      paidMembers LONGTEXT,
+      status VARCHAR(20) DEFAULT 'open',
+      createdDate VARCHAR(20),
+      closedDate VARCHAR(20),
+      closedAmount DECIMAL(12,2),
+      closedRemark TEXT,
+      remark TEXT
+    ) CHARACTER SET utf8mb4
+  `)
+  console.log('DB tables initialized')
+}
+
+module.exports = { pool, initDB }
