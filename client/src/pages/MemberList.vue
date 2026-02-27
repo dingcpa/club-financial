@@ -83,7 +83,7 @@
               <th style="width:90px" class="text-caption d-none d-md-table-cell">生日</th>
               <th style="width:160px" class="text-caption">聯絡</th>
               <th style="max-width:120px" class="text-caption d-none d-lg-table-cell">地址</th>
-              <th class="text-center" style="width:80px" class="text-caption">操作</th>
+              <th class="text-center text-caption" style="width:80px">操作</th>
             </tr>
           </thead>
           <tbody>
