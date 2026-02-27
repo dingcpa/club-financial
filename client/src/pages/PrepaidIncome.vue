@@ -34,11 +34,11 @@
             <thead>
               <tr>
                 <th>收款日期</th>
-                <th>社友</th>
+                <th class="d-none d-sm-table-cell">社友</th>
                 <th>項目</th>
-                <th>認列區間</th>
-                <th class="text-right">原始金額</th>
-                <th class="text-right">已認列（累計）</th>
+                <th class="d-none d-sm-table-cell">認列區間</th>
+                <th class="text-right d-none d-sm-table-cell">原始金額</th>
+                <th class="text-right d-none d-md-table-cell">已認列（累計）</th>
                 <th class="text-right text-success">剩餘預收額</th>
               </tr>
             </thead>
@@ -47,12 +47,12 @@
                 <td colspan="7" class="text-center text-medium-emphasis pa-12">此期間尚無預收收入紀錄</td>
               </tr>
               <tr v-for="r in prepaidRows" :key="r.id" :style="{ opacity: r.remaining === 0 ? 0.55 : 1 }">
-                <td>{{ toMinguoDate(r.date) }}</td>
-                <td class="font-weight-medium">{{ r.member || '-' }}</td>
-                <td>{{ r.item }}</td>
-                <td><v-chip size="x-small" color="success" variant="tonal">{{ r.periodText }}</v-chip></td>
-                <td class="text-right">{{ Math.round(r.total).toLocaleString() }}</td>
-                <td class="text-right text-primary">{{ Math.round(r.recognized).toLocaleString() }}</td>
+                <td :class="xs ? 'text-caption' : ''">{{ toMinguoDate(r.date) }}</td>
+                <td class="font-weight-medium d-none d-sm-table-cell">{{ r.member || '-' }}</td>
+                <td :class="xs ? 'text-caption' : ''">{{ r.item }}</td>
+                <td class="d-none d-sm-table-cell"><v-chip size="x-small" color="success" variant="tonal">{{ r.periodText }}</v-chip></td>
+                <td class="text-right d-none d-sm-table-cell">{{ Math.round(r.total).toLocaleString() }}</td>
+                <td class="text-right text-primary d-none d-md-table-cell">{{ Math.round(r.recognized).toLocaleString() }}</td>
                 <td class="text-right font-weight-bold" :class="r.remaining > 0 ? 'text-success' : 'text-medium-emphasis'">
                   {{ Math.round(r.remaining).toLocaleString() }}
                 </td>
@@ -93,7 +93,9 @@
 
 <script setup>
 import { ref, computed, inject } from 'vue'
+import { useDisplay } from 'vuetify'
 
+const { xs } = useDisplay()
 const records = inject('records')
 const loading = inject('loading')
 
