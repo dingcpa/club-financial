@@ -78,6 +78,12 @@
                     <span class="text-caption text-success font-weight-bold">{{ getPayment(member, cat).toLocaleString() }}</span>
                   </div>
                 </template>
+                <template v-else-if="getReceivableStatus(member, cat) === 'waived'">
+                  <div class="d-flex flex-column align-center" style="opacity:0.5">
+                    <v-icon size="14" color="grey">mdi-cancel</v-icon>
+                    <span class="text-caption text-grey text-decoration-line-through">免繳</span>
+                  </div>
+                </template>
                 <template v-else>
                   <div class="d-flex flex-column align-center" style="opacity:0.4">
                     <v-icon size="14" color="grey-lighten-1">mdi-close-circle</v-icon>
@@ -98,6 +104,12 @@
                     <div class="d-flex flex-column align-center">
                       <v-icon size="14" color="success">mdi-check-circle</v-icon>
                       <span class="text-caption text-success font-weight-bold">{{ getAgencyPayment(member, agency).paidAmount.toLocaleString() }}</span>
+                    </div>
+                  </template>
+                  <template v-else-if="getAgencyReceivableStatus(member, agency.id) === 'waived'">
+                    <div class="d-flex flex-column align-center" style="opacity:0.5">
+                      <v-icon size="14" color="grey">mdi-cancel</v-icon>
+                      <span class="text-caption text-grey text-decoration-line-through">免繳</span>
                     </div>
                   </template>
                   <template v-else>
@@ -175,6 +187,7 @@ const addDuesSetting = inject('addDuesSetting')
 const updateDuesSetting = inject('updateDuesSetting')
 const deleteDuesSetting = inject('deleteDuesSetting')
 const agencyCollections = inject('agencyCollections')
+const receivables = inject('receivables')
 
 const selectedYear = ref(new Date().getFullYear().toString())
 const isModalOpen = ref(false)
@@ -280,6 +293,22 @@ function getCatSetting(cat) {
 
 function getPayment(member, cat) {
   return memberPaymentData.value[member]?.[cat]?.amount || 0
+}
+
+// 從 receivables 取得特定社費項目的狀態
+function getReceivableStatus(member, cat) {
+  const rec = (receivables.value || []).find(r =>
+    r.sourceType === 'dues' && r.sourceRef === cat && r.memberName === member && r.dueYear === selectedYear.value
+  )
+  return rec ? rec.status : null  // 'pending' | 'paid' | 'waived' | null
+}
+
+// 從 receivables 取得代收項目的狀態
+function getAgencyReceivableStatus(member, agencyId) {
+  const rec = (receivables.value || []).find(r =>
+    r.sourceType === 'agency' && r.sourceRef === String(agencyId) && r.memberName === member
+  )
+  return rec ? rec.status : null
 }
 
 function getMemberTotal(member) {

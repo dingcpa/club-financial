@@ -149,6 +149,7 @@ import { useFinance } from './composables/useFinance.js'
 import { useMembers } from './composables/useMembers.js'
 import { useDues } from './composables/useDues.js'
 import { useAgencyCollections } from './composables/useAgencyCollections.js'
+import { useReceivables } from './composables/useReceivables.js'
 
 import LoginPage from './pages/LoginPage.vue'
 import Summary from './pages/Summary.vue'
@@ -180,6 +181,7 @@ const { records, loading, fetchRecords, addRecord: apiAddRecord, addRecordsBatch
 const { members, memLoading, fetchMembers, addMember: apiAddMember, updateMember: apiUpdateMember, deleteMember: apiDeleteMember } = useMembers()
 const { duesSettings, fetchDuesSettings, addDuesSetting, updateDuesSetting, deleteDuesSetting } = useDues()
 const { agencyCollections, agencyLoading, fetchAgencyCollections, createCollection, recordPayment, removePayment, closeCollection, deleteCollection } = useAgencyCollections()
+const { receivables, recLoading, fetchReceivables, fetchOutstanding, settleBatch, waiveReceivable, reopenReceivable } = useReceivables()
 
 // ----- 導覽選單定義 -----
 const reportItems = [
@@ -357,11 +359,20 @@ provide('recordPayment', recordPayment)
 provide('removePayment', removePayment)
 provide('closeCollection', closeCollection)
 provide('deleteCollection', deleteCollection)
+provide('fetchRecords', fetchRecords)
+provide('receivables', receivables)
+provide('recLoading', recLoading)
+provide('fetchReceivables', fetchReceivables)
+provide('fetchOutstanding', fetchOutstanding)
+provide('settleBatch', settleBatch)
+provide('waiveReceivable', waiveReceivable)
+provide('reopenReceivable', reopenReceivable)
 
 // ----- 初始化 -----
 watch(isAuthenticated, (val) => {
   if (val) {
-    Promise.all([fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections()])
+    const currentYear = new Date().getFullYear().toString()
+    Promise.all([fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections(), fetchReceivables({ year: currentYear })])
   }
 }, { immediate: true })
 </script>

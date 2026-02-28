@@ -211,13 +211,14 @@ const members = inject('members')
 const duesSettings = inject('duesSettings')
 const editingRecord = inject('editingRecord')
 const addRecord = inject('addRecord')
-const addRecordsBatchAndGoToDues = inject('addRecordsBatchAndGoToDues')
 const updateRecord = inject('updateRecord')
 const deleteRecord = inject('deleteRecord')
 const handleCancelEdit = inject('handleCancelEdit')
-const agencyCollections = inject('agencyCollections')
-const injRecordPayment = inject('recordPayment')
-const fetchAgencyCollections = inject('fetchAgencyCollections')
+const setActiveTab = inject('setActiveTab')
+const fetchOutstanding = inject('fetchOutstanding')
+const settleBatch = inject('settleBatch')
+const fetchReceivables = inject('fetchReceivables')
+const fetchRecords = inject('fetchRecords')
 
 const ACCOUNTS = ['淑華代收付', '一銀帳戶', '社長代收付']
 const currentMonth = new Date().toISOString().substring(0, 7)
@@ -297,50 +298,30 @@ watch(editingRecord, (ed) => {
   }
 }, { immediate: true })
 
-// 監聽社友+日期 → 計算待沖帳（社費 + 代收代付）
-watch([() => formData.value.member, () => formData.value.date, agencyCollections], () => {
+// 監聽社友+日期 → 從 receivables API 取得待沖帳項目
+watch([() => formData.value.member, () => formData.value.date], async () => {
   if (!formData.value.member || editingRecord.value) {
     outstandingDues.value = []
     prevOverpayment.value = 0
     return
   }
-  const selYear = formData.value.date.split('-')[0]
-  const memberPayments = (records.value || []).filter(r =>
-    r.type === 'income' && r.member === formData.value.member && r.date.startsWith(selYear)
-  )
-  // 社費未繳
-  const unpaidDues = (duesSettings.value || []).filter(setting => {
-    const isDue = !setting.dueDate || setting.dueDate <= formData.value.date
-    if (!isDue) return false
-    return !memberPayments.some(p => p.item === setting.category)
-  }).map(s => ({
-    id: `dues:${s.category}`,
-    sourceType: 'dues',
-    category: s.category,
-    standardAmount: s.standardAmount,
-    dueDate: s.dueDate,
-    agencyCollectionId: null,
-  }))
-  // 代收代付未繳
-  const unpaidAgency = (agencyCollections.value || [])
-    .filter(col => col.status === 'open')
-    .flatMap(col => {
-      const target = col.targetMembers.find(m => m.name === formData.value.member)
-      if (!target) return []
-      const isPaid = col.paidMembers.some(p => p.memberName === formData.value.member)
-      if (isPaid) return []
-      return [{
-        id: `agency:${col.id}`,
-        sourceType: 'agency',
-        category: col.title,
-        standardAmount: target.amount,
-        dueDate: col.createdDate,
-        agencyCollectionId: col.id,
-      }]
-    })
-  outstandingDues.value = [...unpaidDues, ...unpaidAgency]
-  selectedDues.value = outstandingDues.value.map(u => u.id)
+  try {
+    const items = await fetchOutstanding(formData.value.member)
+    // 轉換為統一格式（相容原有模板）
+    outstandingDues.value = items.map(r => ({
+      id: r.id,                     // receivable DB id
+      sourceType: r.sourceType,     // 'dues' | 'agency'
+      category: r.sourceRef,        // 顯示用名稱
+      standardAmount: r.amount,     // 應收金額
+      dueDate: r.dueDate,
+    }))
+    selectedDues.value = outstandingDues.value.map(u => u.id)
+  } catch (e) {
+    outstandingDues.value = []
+    selectedDues.value = []
+  }
 
+  // 溢收款餘額（仍從 finance records 計算）
   const overpayments = (records.value || []).filter(r =>
     r.type === 'income' && r.member === formData.value.member && r.item === '溢收款'
   )
@@ -424,45 +405,28 @@ async function handleSubmit() {
     return
   }
 
-  // 批次模式
+  // 批次沖帳模式（透過 receivables settle-batch API）
   if (!editingRecord.value && selectedDues.value.length > 0) {
     const rec = received.value
     if (rec <= 0 && prevOverpayment.value <= 0) { alert('請輸入收款金額'); return }
     const { settled, surplus } = computeSettlement()
     if (settled.length === 0 && surplus === 0) { alert('收款金額不足以沖抵任何一筆應收項目，請確認金額是否正確。'); return }
 
-    const selYear = formData.value.date.split('-')[0]
-    // 分離社費項目和代收款項目
-    const duesSettled = settled.filter(s => s.sourceType === 'dues')
-    const agencySettled = settled.filter(s => s.sourceType === 'agency')
-
-    // 社費 → 產生 finance income 記錄
-    const settledRecords = duesSettled.map(u => {
-      const auto = getAutoPeriod(u.category)
-      return {
-        type: 'income', date: formData.value.date, item: u.category,
-        member: formData.value.member, account: formData.value.account,
-        amount: u.standardAmount, remark: formData.value.remark,
-        startPeriod: auto ? `${selYear}-${auto.start}` : null,
-        endPeriod: auto ? `${selYear}-${auto.end}` : null,
-      }
+    // 呼叫後端統一沖帳 API
+    await settleBatch({
+      memberName: formData.value.member,
+      date: formData.value.date,
+      account: formData.value.account,
+      receivableIds: settled.map(s => s.id),
+      receivedAmount: rec,
+      prevOverpayment: prevOverpayment.value,
+      remark: formData.value.remark,
     })
-    const extraRecords = []
-    if (prevOverpayment.value > 0) {
-      extraRecords.push({ type: 'income', date: formData.value.date, item: '溢收款', member: formData.value.member, account: formData.value.account, amount: -prevOverpayment.value, remark: '前期溢收款結清（沖抵本次收款計算）', startPeriod: null, endPeriod: null })
-    }
-    if (surplus > 0) {
-      extraRecords.push({ type: 'income', date: formData.value.date, item: '溢收款', member: formData.value.member, account: formData.value.account, amount: surplus, remark: `溢收款（收款 ${rec.toLocaleString()}，超出已沖項目總額）`, startPeriod: null, endPeriod: null })
-    }
-    // 提交社費 finance 記錄
-    const financeRecords = [...settledRecords, ...extraRecords]
-    if (financeRecords.length > 0) {
-      await addRecordsBatchAndGoToDues(financeRecords)
-    }
-    // 代收款 → 呼叫 agency pay API（不產生 finance 記錄）
-    for (const item of agencySettled) {
-      await injRecordPayment(item.agencyCollectionId, formData.value.member, item.standardAmount, formData.value.date)
-    }
+
+    // 刷新前端資料
+    const currentYear = formData.value.date.split('-')[0]
+    await Promise.all([fetchRecords(), fetchReceivables({ year: currentYear })])
+    setActiveTab('dues')
     resetForm()
     return
   }

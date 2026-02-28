@@ -103,6 +103,8 @@ app.post('/api/members', async (req, res) => {
             jobTitle2: jobTitle2 || ''
         };
         await pool.query('INSERT INTO members SET ?', [newMember]);
+        // 自動為新社員產生所有社費設定的應收
+        await generateMemberReceivables(name || '');
         res.status(201).json(newMember);
     } catch (e) {
         res.status(500).json({ error: 'Failed to add member' });
@@ -129,8 +131,14 @@ app.delete('/api/members/:id', async (req, res) => {
         const id = parseInt(req.params.id);
         if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID format' });
         console.log(`Incoming DELETE member ID ${id}`);
+        // 先查出 memberName 以便刪除 receivables
+        const [memberRows] = await pool.query('SELECT name FROM members WHERE id=?', [id]);
         const [result] = await pool.query('DELETE FROM members WHERE id=?', [id]);
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Member not found' });
+        // 刪除對應的 pending receivables
+        if (memberRows.length > 0) {
+            await pool.query(`DELETE FROM receivables WHERE memberName=? AND status='pending'`, [memberRows[0].name]);
+        }
         res.json({ message: 'Member deleted successfully' });
     } catch (e) {
         res.status(500).json({ error: 'Failed to delete member' });
@@ -154,6 +162,8 @@ app.post('/api/dues-settings', async (req, res) => {
         if (existing.length > 0) return res.status(400).json({ error: 'Category already exists' });
         const newSetting = { category, dueDate: dueDate || '', standardAmount: parseFloat(standardAmount) || 0 };
         await pool.query('INSERT INTO dues_settings SET ?', [newSetting]);
+        // 自動為所有社員產生應收
+        await generateDuesReceivables(category, dueDate || '', parseFloat(standardAmount) || 0);
         res.status(201).json(newSetting);
     } catch (e) {
         res.status(500).json({ error: 'Failed to add dues setting' });
@@ -176,8 +186,18 @@ app.put('/api/dues-settings/:category', async (req, res) => {
             // Category rename: insert new row then delete old
             await pool.query('INSERT INTO dues_settings SET ?', [updated]);
             await pool.query('DELETE FROM dues_settings WHERE category=?', [oldCategory]);
+            // 同步更新 receivables 的 sourceRef
+            await pool.query(
+                `UPDATE receivables SET sourceRef=?, amount=?, dueDate=? WHERE sourceType='dues' AND sourceRef=? AND status='pending'`,
+                [updated.category, updated.standardAmount, updated.dueDate || null, oldCategory]
+            );
         } else {
             await pool.query('UPDATE dues_settings SET ? WHERE category=?', [updated, oldCategory]);
+            // 同步更新 pending receivables 的金額和日期
+            await pool.query(
+                `UPDATE receivables SET amount=?, dueDate=? WHERE sourceType='dues' AND sourceRef=? AND status='pending'`,
+                [updated.standardAmount, updated.dueDate || null, oldCategory]
+            );
         }
         res.json(updated);
     } catch (e) {
@@ -189,6 +209,8 @@ app.delete('/api/dues-settings/:category', async (req, res) => {
     try {
         const category = req.params.category;
         await pool.query('DELETE FROM dues_settings WHERE category=?', [category]);
+        // 刪除對應的 pending receivables
+        await pool.query(`DELETE FROM receivables WHERE sourceType='dues' AND sourceRef=? AND status='pending'`, [category]);
         res.json({ message: 'Setting deleted' });
     } catch (e) {
         res.status(500).json({ error: 'Failed to delete dues setting' });
@@ -321,6 +343,8 @@ app.post('/api/agency-collections', async (req, res) => {
             remark:        remark || '',
         };
         await pool.query('INSERT INTO agency_collections SET ?', [newCollection]);
+        // 自動為 targetMembers 產生應收
+        await generateAgencyReceivables(newCollection.id, targetMembers, newCollection.createdDate);
         res.status(201).json(parseCollection(newCollection));
     } catch (e) {
         res.status(500).json({ error: 'Failed to create agency collection' });
@@ -354,6 +378,11 @@ app.post('/api/agency-collections/:id/pay', async (req, res) => {
         });
         await pool.query('UPDATE agency_collections SET paidMembers=? WHERE id=?',
             [JSON.stringify(collection.paidMembers), id]);
+        // 同步更新 receivable → paid
+        await pool.query(
+            `UPDATE receivables SET status='paid', paidAmount=?, paidDate=?, updatedAt=NOW() WHERE sourceType='agency' AND sourceRef=? AND memberName=? AND status='pending'`,
+            [parseFloat(amount), date || new Date().toISOString().split('T')[0], String(id), memberName]
+        );
         res.json(collection);
     } catch (e) {
         res.status(500).json({ error: 'Failed to record payment' });
@@ -370,6 +399,11 @@ app.delete('/api/agency-collections/:id/pay/:memberName', async (req, res) => {
         collection.paidMembers = collection.paidMembers.filter(p => p.memberName !== memberName);
         await pool.query('UPDATE agency_collections SET paidMembers=? WHERE id=?',
             [JSON.stringify(collection.paidMembers), id]);
+        // 同步回滾 receivable → pending
+        await pool.query(
+            `UPDATE receivables SET status='pending', paidAmount=NULL, paidDate=NULL, financeId=NULL, updatedAt=NOW() WHERE sourceType='agency' AND sourceRef=? AND memberName=? AND status='paid'`,
+            [String(id), memberName]
+        );
         res.json(collection);
     } catch (e) {
         res.status(500).json({ error: 'Failed to remove payment' });
@@ -400,11 +434,320 @@ app.delete('/api/agency-collections/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         await pool.query('DELETE FROM agency_collections WHERE id=?', [id]);
+        // 刪除對應的 pending receivables
+        await pool.query(`DELETE FROM receivables WHERE sourceType='agency' AND sourceRef=? AND status='pending'`, [String(id)]);
         res.json({ message: 'Collection deleted' });
     } catch (e) {
         res.status(500).json({ error: 'Failed to delete collection' });
     }
 });
+
+// ─── Receivables (應收帳款) ─────────────────────────────────
+function parseReceivable(row) {
+    return {
+        ...row,
+        amount: parseFloat(row.amount) || 0,
+        paidAmount: row.paidAmount != null ? parseFloat(row.paidAmount) : null,
+    };
+}
+
+// 輔助：為社費設定產生所有社員的應收
+async function generateDuesReceivables(category, dueDate, standardAmount) {
+    const dueYear = dueDate ? dueDate.substring(0, 4) : new Date().getFullYear().toString();
+    const [members] = await pool.query('SELECT name FROM members');
+    const results = [];
+    for (let i = 0; i < members.length; i++) {
+        const id = Date.now() + i;
+        try {
+            await pool.query(
+                `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status) VALUES (?,?,?,?,?,?,?,?)`,
+                [id, 'dues', category, members[i].name, parseFloat(standardAmount), dueDate || null, dueYear, 'pending']
+            );
+            results.push({ id, memberName: members[i].name });
+        } catch (e) { /* UNIQUE conflict, skip */ }
+    }
+    return results;
+}
+
+// 輔助：為新社員產生所有社費設定的應收
+async function generateMemberReceivables(memberName) {
+    const currentYear = new Date().getFullYear().toString();
+    const [settings] = await pool.query('SELECT * FROM dues_settings');
+    const results = [];
+    for (let i = 0; i < settings.length; i++) {
+        const s = settings[i];
+        const dueYear = s.dueDate ? s.dueDate.substring(0, 4) : currentYear;
+        const id = Date.now() + i;
+        try {
+            await pool.query(
+                `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status) VALUES (?,?,?,?,?,?,?,?)`,
+                [id, 'dues', s.category, memberName, parseFloat(s.standardAmount), s.dueDate || null, dueYear, 'pending']
+            );
+            results.push({ id, category: s.category });
+        } catch (e) { /* UNIQUE conflict, skip */ }
+    }
+    return results;
+}
+
+// 輔助：為代收代付產生應收
+async function generateAgencyReceivables(collectionId, targetMembers, createdDate) {
+    const dueYear = createdDate ? createdDate.substring(0, 4) : new Date().getFullYear().toString();
+    const results = [];
+    for (let i = 0; i < targetMembers.length; i++) {
+        const t = targetMembers[i];
+        const id = Date.now() + i;
+        try {
+            await pool.query(
+                `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status) VALUES (?,?,?,?,?,?,?,?)`,
+                [id, 'agency', String(collectionId), t.name, parseFloat(t.amount), createdDate || null, dueYear, 'pending']
+            );
+            results.push({ id, memberName: t.name });
+        } catch (e) { /* UNIQUE conflict, skip */ }
+    }
+    return results;
+}
+
+// 查詢應收列表
+app.get('/api/receivables', async (req, res) => {
+    try {
+        const { year, member, status, sourceType } = req.query;
+        let sql = 'SELECT * FROM receivables WHERE 1=1';
+        const params = [];
+        if (year) { sql += ' AND dueYear=?'; params.push(year); }
+        if (member) { sql += ' AND memberName=?'; params.push(member); }
+        if (status) { sql += ' AND status=?'; params.push(status); }
+        if (sourceType) { sql += ' AND sourceType=?'; params.push(sourceType); }
+        sql += ' ORDER BY dueDate ASC, memberName ASC';
+        const [rows] = await pool.query(sql, params);
+        res.json(rows.map(parseReceivable));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read receivables' });
+    }
+});
+
+// 特定社友的未沖帳應收（IncomeForm 用）
+app.get('/api/receivables/outstanding/:memberName', async (req, res) => {
+    try {
+        const memberName = decodeURIComponent(req.params.memberName);
+        const [rows] = await pool.query(
+            `SELECT * FROM receivables WHERE memberName=? AND status='pending' ORDER BY dueDate ASC`,
+            [memberName]
+        );
+        res.json(rows.map(parseReceivable));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read outstanding receivables' });
+    }
+});
+
+// 批次沖帳（核心 API）
+app.post('/api/receivables/settle-batch', async (req, res) => {
+    try {
+        const { memberName, date, account, receivableIds, receivedAmount, prevOverpayment, remark } = req.body;
+        if (!memberName || !date || !account || !receivableIds?.length) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // 查出指定的 receivables
+        const placeholders = receivableIds.map(() => '?').join(',');
+        const [receivables] = await pool.query(
+            `SELECT * FROM receivables WHERE id IN (${placeholders}) AND status='pending'`,
+            receivableIds
+        );
+
+        // 依序沖抵（與前端 computeSettlement 邏輯一致）
+        const total = (parseFloat(receivedAmount) || 0) + (parseFloat(prevOverpayment) || 0);
+        let remaining = total;
+        const settled = [];
+        const skipped = [];
+        for (const r of receivables) {
+            const amt = parseFloat(r.amount);
+            if (remaining >= amt) {
+                settled.push(r);
+                remaining -= amt;
+            } else {
+                skipped.push(r);
+            }
+        }
+
+        const financeRecords = [];
+        const selYear = date.split('-')[0];
+
+        // 社費已沖項 → 產生 finance income 記錄 + 更新 receivable
+        const duesSettled = settled.filter(r => r.sourceType === 'dues');
+        for (let i = 0; i < duesSettled.length; i++) {
+            const r = duesSettled[i];
+            const amt = parseFloat(r.amount);
+            // 自動判斷平攤區間
+            const auto = getAutoPeriodServer(r.sourceRef);
+            const financeId = Date.now() + i;
+            const record = {
+                id: financeId,
+                type: 'income',
+                date,
+                item: r.sourceRef,
+                member: memberName,
+                account,
+                amount: amt,
+                remark: remark || '',
+                startPeriod: auto ? `${selYear}-${auto.start}` : null,
+                endPeriod: auto ? `${selYear}-${auto.end}` : null,
+                fromAccount: '',
+                toAccount: '',
+            };
+            await pool.query('INSERT INTO finance SET ?', [record]);
+            await pool.query(
+                `UPDATE receivables SET status='paid', paidAmount=?, paidDate=?, financeId=?, updatedAt=NOW() WHERE id=?`,
+                [amt, date, financeId, r.id]
+            );
+            financeRecords.push(record);
+        }
+
+        // 代收已沖項 → 更新 agency_collections paidMembers + receivable
+        const agencySettled = settled.filter(r => r.sourceType === 'agency');
+        for (const r of agencySettled) {
+            const agencyId = parseInt(r.sourceRef);
+            const amt = parseFloat(r.amount);
+            // 更新 agency_collections paidMembers
+            const [agRows] = await pool.query('SELECT * FROM agency_collections WHERE id=?', [agencyId]);
+            if (agRows.length > 0) {
+                const col = parseCollection(agRows[0]);
+                col.paidMembers.push({ memberName, date, amount: amt });
+                await pool.query('UPDATE agency_collections SET paidMembers=? WHERE id=?',
+                    [JSON.stringify(col.paidMembers), agencyId]);
+            }
+            await pool.query(
+                `UPDATE receivables SET status='paid', paidAmount=?, paidDate=?, updatedAt=NOW() WHERE id=?`,
+                [amt, date, r.id]
+            );
+        }
+
+        // 溢收款處理
+        const extraRecords = [];
+        const baseTs = Date.now() + duesSettled.length + 100;
+        if ((parseFloat(prevOverpayment) || 0) > 0) {
+            const rec = {
+                id: baseTs,
+                type: 'income', date, item: '溢收款', member: memberName, account,
+                amount: -(parseFloat(prevOverpayment)), remark: '前期溢收款結清（沖抵本次收款計算）',
+                startPeriod: null, endPeriod: null, fromAccount: '', toAccount: '',
+            };
+            await pool.query('INSERT INTO finance SET ?', [rec]);
+            extraRecords.push(rec);
+        }
+        if (remaining > 0) {
+            const rec = {
+                id: baseTs + 1,
+                type: 'income', date, item: '溢收款', member: memberName, account,
+                amount: remaining,
+                remark: `溢收款（收款 ${(parseFloat(receivedAmount) || 0).toLocaleString()}，超出已沖項目總額）`,
+                startPeriod: null, endPeriod: null, fromAccount: '', toAccount: '',
+            };
+            await pool.query('INSERT INTO finance SET ?', [rec]);
+            extraRecords.push(rec);
+        }
+
+        res.json({
+            settled: settled.map(parseReceivable),
+            skipped: skipped.map(parseReceivable),
+            surplus: remaining,
+            financeRecords: [...financeRecords, ...extraRecords].map(parseFinance),
+        });
+    } catch (e) {
+        console.error('Error in settle-batch:', e);
+        res.status(500).json({ error: 'Failed to settle receivables' });
+    }
+});
+
+// 免繳
+app.put('/api/receivables/:id/waive', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { waivedReason } = req.body || {};
+        const [rows] = await pool.query('SELECT * FROM receivables WHERE id=?', [id]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Receivable not found' });
+        if (rows[0].status !== 'pending') return res.status(400).json({ error: '只有 pending 狀態可免繳' });
+        await pool.query(
+            `UPDATE receivables SET status='waived', waivedReason=?, updatedAt=NOW() WHERE id=?`,
+            [waivedReason || '', id]
+        );
+        const [updated] = await pool.query('SELECT * FROM receivables WHERE id=?', [id]);
+        res.json(parseReceivable(updated[0]));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to waive receivable' });
+    }
+});
+
+// 重新開立（撤銷 paid/waived）
+app.put('/api/receivables/:id/reopen', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [rows] = await pool.query('SELECT * FROM receivables WHERE id=?', [id]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Receivable not found' });
+        if (rows[0].status === 'pending') return res.status(400).json({ error: '已是 pending 狀態' });
+        await pool.query(
+            `UPDATE receivables SET status='pending', paidAmount=NULL, paidDate=NULL, financeId=NULL, waivedReason=NULL, updatedAt=NOW() WHERE id=?`,
+            [id]
+        );
+        const [updated] = await pool.query('SELECT * FROM receivables WHERE id=?', [id]);
+        res.json(parseReceivable(updated[0]));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to reopen receivable' });
+    }
+});
+
+// 手動觸發產生（遷移/補建用）
+app.post('/api/receivables/generate', async (req, res) => {
+    try {
+        const currentYear = new Date().getFullYear().toString();
+        const [settings] = await pool.query('SELECT * FROM dues_settings');
+        const [members] = await pool.query('SELECT name FROM members');
+        const [agencies] = await pool.query('SELECT * FROM agency_collections');
+        let count = 0;
+
+        // 社費 × 社員
+        for (const s of settings) {
+            const dueYear = s.dueDate ? s.dueDate.substring(0, 4) : currentYear;
+            for (const m of members) {
+                try {
+                    await pool.query(
+                        `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status) VALUES (?,?,?,?,?,?,?,?)`,
+                        [Date.now() + count, 'dues', s.category, m.name, parseFloat(s.standardAmount), s.dueDate || null, dueYear, 'pending']
+                    );
+                    count++;
+                } catch (e) { /* skip */ }
+            }
+        }
+
+        // 代收代付
+        for (const a of agencies) {
+            const targets = JSON.parse(a.targetMembers || '[]');
+            const dueYear = a.createdDate ? a.createdDate.substring(0, 4) : currentYear;
+            for (const t of targets) {
+                try {
+                    await pool.query(
+                        `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status) VALUES (?,?,?,?,?,?,?,?)`,
+                        [Date.now() + count, 'agency', String(a.id), t.name, parseFloat(t.amount), a.createdDate || null, dueYear, 'pending']
+                    );
+                    count++;
+                } catch (e) { /* skip */ }
+            }
+        }
+
+        res.json({ message: `產生完成，共 ${count} 筆`, count });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to generate receivables' });
+    }
+});
+
+// 後端用：自動判斷社費項目的平攤區間
+function getAutoPeriodServer(itemName) {
+    const match = itemName.match(/^(\d{1,2})-(\d{1,2})月/);
+    if (!match) return null;
+    return {
+        start: match[1].padStart(2, '0'),
+        end:   match[2].padStart(2, '0'),
+    };
+}
 
 // ─── Debug ─────────────────────────────────────────────────
 app.get('/api/debug', async (req, res) => {

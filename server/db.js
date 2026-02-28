@@ -73,6 +73,25 @@ async function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) CHARACTER SET utf8mb4
   `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS receivables (
+      id BIGINT PRIMARY KEY,
+      sourceType VARCHAR(20) NOT NULL,
+      sourceRef VARCHAR(255) NOT NULL,
+      memberName VARCHAR(100) NOT NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      dueDate VARCHAR(20),
+      dueYear VARCHAR(4) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      paidAmount DECIMAL(12,2),
+      paidDate VARCHAR(20),
+      financeId BIGINT,
+      waivedReason TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_receivable (sourceType, sourceRef, memberName, dueYear)
+    ) CHARACTER SET utf8mb4
+  `)
   // 為已存在的 users 表補上 role 欄位（MariaDB 支援 IF NOT EXISTS）
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`)
   console.log('DB tables initialized')
