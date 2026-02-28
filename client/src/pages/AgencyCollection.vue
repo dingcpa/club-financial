@@ -305,6 +305,7 @@
 import { ref, computed, inject, onMounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
+import { apiFetch } from '../composables/apiFetch.js'
 
 const { xs } = useDisplay()
 
@@ -324,7 +325,7 @@ onMounted(fetchCollections)
 async function fetchCollections() {
   loading.value = true
   try {
-    const res = await fetch(API_URL)
+    const res = await apiFetch(API_URL)
     collections.value = await res.json()
   } catch (e) {
     console.error('Error fetching collections:', e)
@@ -344,9 +345,8 @@ async function handleCreate() {
     return
   }
   try {
-    const res = await fetch(API_URL, {
+    const res = await apiFetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: formData.value.title, targetMembers: formData.value.targetMembers, remark: formData.value.remark })
     })
     if (res.ok) {
@@ -361,9 +361,8 @@ async function handleCreate() {
 
 async function handlePayment(collectionId, memberName, amount) {
   try {
-    const res = await fetch(`${API_URL}/${collectionId}/pay`, {
+    const res = await apiFetch(`${API_URL}/${collectionId}/pay`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ memberName, date: new Date().toISOString().split('T')[0], amount })
     })
     if (res.ok) fetchCollections()
@@ -383,7 +382,7 @@ async function confirmRemovePayment(collectionId, memberName) {
   })
   if (result.isConfirmed) {
     try {
-      const res = await fetch(`${API_URL}/${collectionId}/pay/${encodeURIComponent(memberName)}`, { method: 'DELETE' })
+      const res = await apiFetch(`${API_URL}/${collectionId}/pay/${encodeURIComponent(memberName)}`, { method: 'DELETE' })
       if (res.ok) fetchCollections()
     } catch (e) {
       console.error('Error removing payment:', e)
@@ -402,9 +401,8 @@ async function handleClose() {
   const totalCollected = collection.paidMembers.reduce((sum, p) => sum + p.amount, 0)
   closeDialog.value.show = false
   try {
-    const res = await fetch(`${API_URL}/${collectionId}/close`, {
+    const res = await apiFetch(`${API_URL}/${collectionId}/close`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ closedAmount: totalCollected, closedRemark: remark || '' })
     })
     if (res.ok) fetchCollections()
@@ -424,7 +422,7 @@ async function handleDelete(collectionId) {
   })
   if (!result.isConfirmed) return
   try {
-    const res = await fetch(`${API_URL}/${collectionId}`, { method: 'DELETE' })
+    const res = await apiFetch(`${API_URL}/${collectionId}`, { method: 'DELETE' })
     if (res.ok) fetchCollections()
   } catch (e) {
     console.error('Error deleting collection:', e)
