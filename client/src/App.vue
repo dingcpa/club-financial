@@ -148,6 +148,7 @@ import { useAuth } from './composables/useAuth.js'
 import { useFinance } from './composables/useFinance.js'
 import { useMembers } from './composables/useMembers.js'
 import { useDues } from './composables/useDues.js'
+import { useAgencyCollections } from './composables/useAgencyCollections.js'
 
 import LoginPage from './pages/LoginPage.vue'
 import Summary from './pages/Summary.vue'
@@ -162,6 +163,7 @@ import AccountSummary from './pages/AccountSummary.vue'
 import AgencyCollection from './pages/AgencyCollection.vue'
 import RecordListPanel from './pages/RecordListPanel.vue'
 import UserManagement from './pages/UserManagement.vue'
+import ReceivablesSummary from './pages/ReceivablesSummary.vue'
 
 // ----- Auth -----
 const { isAuthenticated, isAdmin, user, logout } = useAuth()
@@ -177,6 +179,7 @@ const editingRecord = ref(null)
 const { records, loading, fetchRecords, addRecord: apiAddRecord, addRecordsBatch: apiAddBatch, updateRecord: apiUpdateRecord, deleteRecord: apiDeleteRecord } = useFinance()
 const { members, memLoading, fetchMembers, addMember: apiAddMember, updateMember: apiUpdateMember, deleteMember: apiDeleteMember } = useMembers()
 const { duesSettings, fetchDuesSettings, addDuesSetting, updateDuesSetting, deleteDuesSetting } = useDues()
+const { agencyCollections, agencyLoading, fetchAgencyCollections, createCollection, recordPayment, removePayment, closeCollection, deleteCollection } = useAgencyCollections()
 
 // ----- 導覽選單定義 -----
 const reportItems = [
@@ -187,6 +190,7 @@ const reportItems = [
 ]
 const memberItems = [
   { tab: 'dues', icon: 'mdi-format-list-bulleted', title: '社友繳費總覽' },
+  { tab: 'receivables', icon: 'mdi-file-document-check', title: '應收帳款' },
   { tab: 'members', icon: 'mdi-account-multiple', title: '社友名冊' },
   { tab: 'agency', icon: 'mdi-hand-coin', title: '代收代付' },
 ]
@@ -211,6 +215,7 @@ const pageMap = {
   'dues': MemberDues,
   'members': MemberList,
   'agency': AgencyCollection,
+  'receivables': ReceivablesSummary,
   'income': IncomeForm,
   'income-list': RecordListPanel,
   'expense': ExpenseForm,
@@ -345,11 +350,18 @@ provide('deleteDuesSetting', deleteDuesSetting)
 provide('handleEditClick', handleEditClick)
 provide('handleCancelEdit', handleCancelEdit)
 provide('currentUserId', computed(() => user.value?.id))
+provide('agencyCollections', agencyCollections)
+provide('fetchAgencyCollections', fetchAgencyCollections)
+provide('createCollection', createCollection)
+provide('recordPayment', recordPayment)
+provide('removePayment', removePayment)
+provide('closeCollection', closeCollection)
+provide('deleteCollection', deleteCollection)
 
 // ----- 初始化 -----
 watch(isAuthenticated, (val) => {
   if (val) {
-    Promise.all([fetchRecords(), fetchMembers(), fetchDuesSettings()])
+    Promise.all([fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections()])
   }
 }, { immediate: true })
 </script>

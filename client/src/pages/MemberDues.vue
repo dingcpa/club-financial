@@ -47,13 +47,24 @@
                   </span>
                 </div>
               </th>
+              <th
+                v-for="agency in agencyCategories"
+                :key="'a-'+agency.id"
+                class="text-center"
+                style="min-width:110px;white-space:nowrap;background:#fffbeb;border-left:1px solid #fcd34d"
+              >
+                <div class="d-flex flex-column align-center ga-1">
+                  <v-chip size="x-small" color="warning" variant="tonal">代收</v-chip>
+                  <span class="text-caption">{{ agency.title }}</span>
+                </div>
+              </th>
               <th class="text-right" style="min-width:90px;white-space:nowrap;border-left:1px solid #e2e8f0">年度總計</th>
               <th class="text-right text-success" style="min-width:90px;white-space:nowrap;border-left:1px solid #bbf7d0;background:#ecfdf5">溢收款</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="allUniqueMembers.length === 0">
-              <td :colspan="duesCategories.length + 4" class="text-center text-medium-emphasis pa-12">
+              <td :colspan="duesCategories.length + agencyCategories.length + 4" class="text-center text-medium-emphasis pa-12">
                 尚未建立社友資料且無繳費紀錄
               </td>
             </tr>
@@ -76,8 +87,32 @@
                   </div>
                 </template>
               </td>
+              <td
+                v-for="agency in agencyCategories"
+                :key="'a-'+agency.id"
+                class="text-center pa-2"
+                style="background:#fffbeb;border-left:1px solid #fcd34d"
+              >
+                <template v-if="getAgencyPayment(member, agency).inScope">
+                  <template v-if="getAgencyPayment(member, agency).paid">
+                    <div class="d-flex flex-column align-center">
+                      <v-icon size="14" color="success">mdi-check-circle</v-icon>
+                      <span class="text-caption text-success font-weight-bold">{{ getAgencyPayment(member, agency).paidAmount.toLocaleString() }}</span>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="d-flex flex-column align-center" style="opacity:0.4">
+                      <v-icon size="14" color="grey-lighten-1">mdi-close-circle</v-icon>
+                      <span class="text-caption text-medium-emphasis">{{ getAgencyPayment(member, agency).targetAmount.toLocaleString() }}</span>
+                    </div>
+                  </template>
+                </template>
+                <template v-else>
+                  <span class="text-caption text-medium-emphasis" style="opacity:0.3">—</span>
+                </template>
+              </td>
               <td class="text-right text-caption font-weight-bold text-primary" style="border-left:1px solid #e2e8f0;white-space:nowrap">
-                {{ getMemberTotal(member).toLocaleString() }}
+                {{ (getMemberTotal(member) + getAgencyTotal(member)).toLocaleString() }}
               </td>
               <td class="text-right text-caption font-weight-bold" :class="getOverpayment(member) > 0 ? 'text-success' : 'text-medium-emphasis'" style="border-left:1px solid #bbf7d0;background:#ecfdf5;white-space:nowrap">
                 {{ getOverpayment(member) > 0 ? Math.round(getOverpayment(member)).toLocaleString() : '—' }}
@@ -139,6 +174,7 @@ const handleEditClick = inject('handleEditClick')
 const addDuesSetting = inject('addDuesSetting')
 const updateDuesSetting = inject('updateDuesSetting')
 const deleteDuesSetting = inject('deleteDuesSetting')
+const agencyCollections = inject('agencyCollections')
 
 const selectedYear = ref(new Date().getFullYear().toString())
 const isModalOpen = ref(false)
@@ -208,6 +244,35 @@ const allUniqueMembers = computed(() => {
     return a.localeCompare(b, 'zh-Hant')
   })
 })
+
+const agencyCategories = computed(() => {
+  return (agencyCollections.value || [])
+    .filter(col => col.createdDate?.startsWith(selectedYear.value))
+    .map(col => ({
+      id: col.id, title: col.title, status: col.status,
+      targetMembers: col.targetMembers, paidMembers: col.paidMembers,
+      createdDate: col.createdDate,
+    }))
+})
+
+function getAgencyPayment(memberName, agency) {
+  const target = agency.targetMembers.find(m => m.name === memberName)
+  if (!target) return { inScope: false }
+  const paid = agency.paidMembers.find(p => p.memberName === memberName)
+  return {
+    inScope: true,
+    targetAmount: target.amount,
+    paid: !!paid,
+    paidAmount: paid?.amount || 0,
+  }
+}
+
+function getAgencyTotal(memberName) {
+  return agencyCategories.value.reduce((sum, agency) => {
+    const info = getAgencyPayment(memberName, agency)
+    return sum + (info.inScope && info.paid ? info.paidAmount : 0)
+  }, 0)
+}
 
 function getCatSetting(cat) {
   return (duesSettings.value || []).find(s => s.category === cat)

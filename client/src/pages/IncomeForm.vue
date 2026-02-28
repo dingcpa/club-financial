@@ -72,31 +72,34 @@
           <div class="d-flex flex-column ga-2">
             <v-card
               v-for="u in outstandingDues"
-              :key="u.category"
+              :key="u.id"
               variant="outlined"
-              :color="selectedDues.includes(u.category) ? 'primary' : undefined"
+              :color="selectedDues.includes(u.id) ? (u.sourceType === 'agency' ? 'warning' : 'primary') : undefined"
               class="pa-2"
               rounded
               style="cursor:pointer"
-              @click="toggleDueSelection(u.category)"
+              @click="toggleDueSelection(u.id)"
             >
               <div class="d-flex justify-space-between align-center">
                 <div class="d-flex align-center ga-2">
                   <v-checkbox-btn
-                    :model-value="selectedDues.includes(u.category)"
-                    color="primary"
+                    :model-value="selectedDues.includes(u.id)"
+                    :color="u.sourceType === 'agency' ? 'warning' : 'primary'"
                     density="compact"
-                    @click.stop="toggleDueSelection(u.category)"
+                    @click.stop="toggleDueSelection(u.id)"
                   />
                   <div>
-                    <div class="text-caption font-weight-medium">{{ u.category }}</div>
-                    <div v-if="u.dueDate" class="text-caption text-medium-emphasis">應收日：{{ u.dueDate }}</div>
+                    <div class="d-flex align-center ga-1">
+                      <v-chip v-if="u.sourceType === 'agency'" size="x-small" color="warning" variant="flat">代收</v-chip>
+                      <span class="text-caption font-weight-medium">{{ u.category }}</span>
+                    </div>
+                    <div v-if="u.dueDate" class="text-caption text-medium-emphasis">{{ u.sourceType === 'agency' ? '建立日' : '應收日' }}：{{ u.dueDate }}</div>
                   </div>
                 </div>
                 <div class="d-flex align-center ga-1">
-                  <v-icon v-if="settlement && settlement.settled.some(s => s.category === u.category)" size="14" color="success">mdi-check-circle</v-icon>
-                  <v-icon v-if="settlement && settlement.skipped.some(s => s.category === u.category)" size="14" color="warning">mdi-alert-circle</v-icon>
-                  <span class="text-caption font-weight-bold" :class="getAmtClass(u.category)">NT$ {{ u.standardAmount.toLocaleString() }}</span>
+                  <v-icon v-if="settlement && settlement.settled.some(s => s.id === u.id)" size="14" color="success">mdi-check-circle</v-icon>
+                  <v-icon v-if="settlement && settlement.skipped.some(s => s.id === u.id)" size="14" color="warning">mdi-alert-circle</v-icon>
+                  <span class="text-caption font-weight-bold" :class="getAmtClass(u.id)">NT$ {{ u.standardAmount.toLocaleString() }}</span>
                 </div>
               </div>
             </v-card>
@@ -212,6 +215,9 @@ const addRecordsBatchAndGoToDues = inject('addRecordsBatchAndGoToDues')
 const updateRecord = inject('updateRecord')
 const deleteRecord = inject('deleteRecord')
 const handleCancelEdit = inject('handleCancelEdit')
+const agencyCollections = inject('agencyCollections')
+const injRecordPayment = inject('recordPayment')
+const fetchAgencyCollections = inject('fetchAgencyCollections')
 
 const ACCOUNTS = ['淑華代收付', '一銀帳戶', '社長代收付']
 const currentMonth = new Date().toISOString().substring(0, 7)
@@ -291,8 +297,8 @@ watch(editingRecord, (ed) => {
   }
 }, { immediate: true })
 
-// 監聽社友+日期 → 計算待沖帳
-watch([() => formData.value.member, () => formData.value.date], () => {
+// 監聽社友+日期 → 計算待沖帳（社費 + 代收代付）
+watch([() => formData.value.member, () => formData.value.date, agencyCollections], () => {
   if (!formData.value.member || editingRecord.value) {
     outstandingDues.value = []
     prevOverpayment.value = 0
@@ -302,13 +308,38 @@ watch([() => formData.value.member, () => formData.value.date], () => {
   const memberPayments = (records.value || []).filter(r =>
     r.type === 'income' && r.member === formData.value.member && r.date.startsWith(selYear)
   )
-  const unpaid = (duesSettings.value || []).filter(setting => {
+  // 社費未繳
+  const unpaidDues = (duesSettings.value || []).filter(setting => {
     const isDue = !setting.dueDate || setting.dueDate <= formData.value.date
     if (!isDue) return false
     return !memberPayments.some(p => p.item === setting.category)
-  })
-  outstandingDues.value = unpaid
-  selectedDues.value = unpaid.map(u => u.category)
+  }).map(s => ({
+    id: `dues:${s.category}`,
+    sourceType: 'dues',
+    category: s.category,
+    standardAmount: s.standardAmount,
+    dueDate: s.dueDate,
+    agencyCollectionId: null,
+  }))
+  // 代收代付未繳
+  const unpaidAgency = (agencyCollections.value || [])
+    .filter(col => col.status === 'open')
+    .flatMap(col => {
+      const target = col.targetMembers.find(m => m.name === formData.value.member)
+      if (!target) return []
+      const isPaid = col.paidMembers.some(p => p.memberName === formData.value.member)
+      if (isPaid) return []
+      return [{
+        id: `agency:${col.id}`,
+        sourceType: 'agency',
+        category: col.title,
+        standardAmount: target.amount,
+        dueDate: col.createdDate,
+        agencyCollectionId: col.id,
+      }]
+    })
+  outstandingDues.value = [...unpaidDues, ...unpaidAgency]
+  selectedDues.value = outstandingDues.value.map(u => u.id)
 
   const overpayments = (records.value || []).filter(r =>
     r.type === 'income' && r.member === formData.value.member && r.item === '溢收款'
@@ -356,10 +387,10 @@ function handleStartPeriodChange(val) {
   if (val > formData.value.endPeriod) formData.value.endPeriod = val
 }
 
-function toggleDueSelection(cat) {
-  const idx = selectedDues.value.indexOf(cat)
+function toggleDueSelection(id) {
+  const idx = selectedDues.value.indexOf(id)
   if (idx >= 0) selectedDues.value.splice(idx, 1)
-  else selectedDues.value.push(cat)
+  else selectedDues.value.push(id)
 }
 
 const settlement = computed(() => {
@@ -372,7 +403,7 @@ function computeSettlement() {
   const total = rec + prevOverpayment.value
   let remaining = total
   const settled = [], skipped = []
-  const items = outstandingDues.value.filter(u => selectedDues.value.includes(u.category))
+  const items = outstandingDues.value.filter(u => selectedDues.value.includes(u.id))
   for (const item of items) {
     if (remaining >= item.standardAmount) { settled.push(item); remaining -= item.standardAmount }
     else skipped.push(item)
@@ -380,10 +411,10 @@ function computeSettlement() {
   return { settled, skipped, surplus: remaining }
 }
 
-function getAmtClass(cat) {
+function getAmtClass(id) {
   if (!settlement.value) return 'text-primary'
-  if (settlement.value.settled.some(s => s.category === cat)) return 'text-success'
-  if (settlement.value.skipped.some(s => s.category === cat)) return 'text-warning'
+  if (settlement.value.settled.some(s => s.id === id)) return 'text-success'
+  if (settlement.value.skipped.some(s => s.id === id)) return 'text-warning'
   return 'text-primary'
 }
 
@@ -401,7 +432,12 @@ async function handleSubmit() {
     if (settled.length === 0 && surplus === 0) { alert('收款金額不足以沖抵任何一筆應收項目，請確認金額是否正確。'); return }
 
     const selYear = formData.value.date.split('-')[0]
-    const settledRecords = settled.map(u => {
+    // 分離社費項目和代收款項目
+    const duesSettled = settled.filter(s => s.sourceType === 'dues')
+    const agencySettled = settled.filter(s => s.sourceType === 'agency')
+
+    // 社費 → 產生 finance income 記錄
+    const settledRecords = duesSettled.map(u => {
       const auto = getAutoPeriod(u.category)
       return {
         type: 'income', date: formData.value.date, item: u.category,
@@ -418,7 +454,15 @@ async function handleSubmit() {
     if (surplus > 0) {
       extraRecords.push({ type: 'income', date: formData.value.date, item: '溢收款', member: formData.value.member, account: formData.value.account, amount: surplus, remark: `溢收款（收款 ${rec.toLocaleString()}，超出已沖項目總額）`, startPeriod: null, endPeriod: null })
     }
-    await addRecordsBatchAndGoToDues([...settledRecords, ...extraRecords])
+    // 提交社費 finance 記錄
+    const financeRecords = [...settledRecords, ...extraRecords]
+    if (financeRecords.length > 0) {
+      await addRecordsBatchAndGoToDues(financeRecords)
+    }
+    // 代收款 → 呼叫 agency pay API（不產生 finance 記錄）
+    for (const item of agencySettled) {
+      await injRecordPayment(item.agencyCollectionId, formData.value.member, item.standardAmount, formData.value.date)
+    }
     resetForm()
     return
   }

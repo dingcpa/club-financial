@@ -302,37 +302,25 @@
 </template>
 
 <script setup>
-import { ref, computed, inject, onMounted } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
-import { apiFetch } from '../composables/apiFetch.js'
 
 const { xs } = useDisplay()
 
-const API_URL = '/api/agency-collections'
-
 const members = inject('members')
+const collections = inject('agencyCollections')
+const loading = inject('loading')
+const injCreateCollection = inject('createCollection')
+const injRecordPayment = inject('recordPayment')
+const injRemovePayment = inject('removePayment')
+const injCloseCollection = inject('closeCollection')
+const injDeleteCollection = inject('deleteCollection')
 
-const collections = ref([])
-const loading = ref(true)
 const showForm = ref(false)
 const expandedId = ref(null)
 const formData = ref({ title: '', defaultAmount: '', targetMembers: [], remark: '' })
 const closeDialog = ref({ show: false, collectionId: null, remark: '' })
-
-onMounted(fetchCollections)
-
-async function fetchCollections() {
-  loading.value = true
-  try {
-    const res = await apiFetch(API_URL)
-    collections.value = await res.json()
-  } catch (e) {
-    console.error('Error fetching collections:', e)
-  } finally {
-    loading.value = false
-  }
-}
 
 async function handleCreate() {
   if (!formData.value.title || formData.value.targetMembers.length === 0) {
@@ -344,31 +332,13 @@ async function handleCreate() {
     await Swal.fire({ title: '請確認所有社友都有設定金額', icon: 'warning', confirmButtonText: '確定' })
     return
   }
-  try {
-    const res = await apiFetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({ title: formData.value.title, targetMembers: formData.value.targetMembers, remark: formData.value.remark })
-    })
-    if (res.ok) {
-      formData.value = { title: '', defaultAmount: '', targetMembers: [], remark: '' }
-      showForm.value = false
-      fetchCollections()
-    }
-  } catch (e) {
-    console.error('Error creating collection:', e)
-  }
+  await injCreateCollection({ title: formData.value.title, targetMembers: formData.value.targetMembers, remark: formData.value.remark })
+  formData.value = { title: '', defaultAmount: '', targetMembers: [], remark: '' }
+  showForm.value = false
 }
 
 async function handlePayment(collectionId, memberName, amount) {
-  try {
-    const res = await apiFetch(`${API_URL}/${collectionId}/pay`, {
-      method: 'POST',
-      body: JSON.stringify({ memberName, date: new Date().toISOString().split('T')[0], amount })
-    })
-    if (res.ok) fetchCollections()
-  } catch (e) {
-    console.error('Error recording payment:', e)
-  }
+  await injRecordPayment(collectionId, memberName, amount)
 }
 
 async function confirmRemovePayment(collectionId, memberName) {
@@ -381,12 +351,7 @@ async function confirmRemovePayment(collectionId, memberName) {
     confirmButtonColor: '#ef4444'
   })
   if (result.isConfirmed) {
-    try {
-      const res = await apiFetch(`${API_URL}/${collectionId}/pay/${encodeURIComponent(memberName)}`, { method: 'DELETE' })
-      if (res.ok) fetchCollections()
-    } catch (e) {
-      console.error('Error removing payment:', e)
-    }
+    await injRemovePayment(collectionId, memberName)
   }
 }
 
@@ -400,15 +365,7 @@ async function handleClose() {
   if (!collection) return
   const totalCollected = collection.paidMembers.reduce((sum, p) => sum + p.amount, 0)
   closeDialog.value.show = false
-  try {
-    const res = await apiFetch(`${API_URL}/${collectionId}/close`, {
-      method: 'POST',
-      body: JSON.stringify({ closedAmount: totalCollected, closedRemark: remark || '' })
-    })
-    if (res.ok) fetchCollections()
-  } catch (e) {
-    console.error('Error closing collection:', e)
-  }
+  await injCloseCollection(collectionId, totalCollected, remark)
 }
 
 async function handleDelete(collectionId) {
@@ -421,12 +378,7 @@ async function handleDelete(collectionId) {
     confirmButtonColor: '#ef4444'
   })
   if (!result.isConfirmed) return
-  try {
-    const res = await apiFetch(`${API_URL}/${collectionId}`, { method: 'DELETE' })
-    if (res.ok) fetchCollections()
-  } catch (e) {
-    console.error('Error deleting collection:', e)
-  }
+  await injDeleteCollection(collectionId)
 }
 
 function toggleExpand(id) {
