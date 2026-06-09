@@ -165,6 +165,7 @@ import AgencyCollection from './pages/AgencyCollection.vue'
 import RecordListPanel from './pages/RecordListPanel.vue'
 import UserManagement from './pages/UserManagement.vue'
 import ReceivablesSummary from './pages/ReceivablesSummary.vue'
+import CategorySettings from './pages/CategorySettings.vue'
 
 // ----- Auth -----
 const { isAuthenticated, isAdmin, user, logout } = useAuth()
@@ -181,7 +182,7 @@ const { records, loading, fetchRecords, addRecord: apiAddRecord, addRecordsBatch
 const { members, memLoading, fetchMembers, addMember: apiAddMember, updateMember: apiUpdateMember, deleteMember: apiDeleteMember } = useMembers()
 const { duesSettings, fetchDuesSettings, addDuesSetting, updateDuesSetting, deleteDuesSetting } = useDues()
 const { agencyCollections, agencyLoading, fetchAgencyCollections, createCollection, recordPayment, removePayment, closeCollection, deleteCollection } = useAgencyCollections()
-const { receivables, recLoading, fetchReceivables, fetchOutstanding, settleBatch, waiveReceivable, reopenReceivable } = useReceivables()
+const { receivables, recLoading, fetchReceivables, fetchOutstanding, settleBatch, waiveReceivable, reopenReceivable, batchGenerate, createReceivable, updateReceivable, deleteReceivable, collectReceivable } = useReceivables()
 
 // ----- 導覽選單定義 -----
 const reportItems = [
@@ -195,9 +196,10 @@ const memberItems = [
   { tab: 'receivables', icon: 'mdi-file-document-check', title: '應收帳款' },
   { tab: 'members', icon: 'mdi-account-multiple', title: '社友名冊' },
   { tab: 'agency', icon: 'mdi-hand-coin', title: '代收代付' },
+  { tab: 'categories', icon: 'mdi-tag-multiple', title: '帳款類別設定' },
 ]
 const transactionItems = [
-  { tab: 'income', icon: 'mdi-plus-circle', title: '新增收入單' },
+  { tab: 'income', icon: 'mdi-plus-circle', title: '其他收入登錄' },
   { tab: 'income-list', icon: 'mdi-magnify', title: '查詢收入單' },
   { tab: 'expense', icon: 'mdi-minus-circle', title: '新增支出單' },
   { tab: 'expense-list', icon: 'mdi-magnify', title: '查詢支出單' },
@@ -218,6 +220,7 @@ const pageMap = {
   'members': MemberList,
   'agency': AgencyCollection,
   'receivables': ReceivablesSummary,
+  'categories': CategorySettings,
   'income': IncomeForm,
   'income-list': RecordListPanel,
   'expense': ExpenseForm,
@@ -367,6 +370,11 @@ provide('fetchOutstanding', fetchOutstanding)
 provide('settleBatch', settleBatch)
 provide('waiveReceivable', waiveReceivable)
 provide('reopenReceivable', reopenReceivable)
+provide('batchGenerate', batchGenerate)
+provide('createReceivable', createReceivable)
+provide('updateReceivable', updateReceivable)
+provide('deleteReceivable', deleteReceivable)
+provide('collectReceivable', collectReceivable)
 
 // ----- 初始化 -----
 watch(isAuthenticated, (val) => {

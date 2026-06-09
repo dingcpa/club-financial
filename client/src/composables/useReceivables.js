@@ -54,6 +54,59 @@ export function useReceivables() {
     }
   }
 
+  // 批次產生帳款（Phase 2）
+  async function batchGenerate(payload) {
+    const res = await apiFetch(`${API_URL}/batch-generate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || '批次產生失敗')
+    return await res.json()
+  }
+
+  // 單筆新增帳款
+  async function createReceivable(payload) {
+    const res = await apiFetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || '新增失敗')
+    const saved = await res.json()
+    receivables.value = [...receivables.value, saved]
+    return saved
+  }
+
+  // 編輯帳款
+  async function updateReceivable(id, payload) {
+    const res = await apiFetch(`${API_URL}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || '更新失敗')
+    const updated = await res.json()
+    receivables.value = receivables.value.map(r => r.id === id ? updated : r)
+    return updated
+  }
+
+  // 刪除帳款
+  async function deleteReceivable(id) {
+    const res = await apiFetch(`${API_URL}/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || '刪除失敗')
+    receivables.value = receivables.value.filter(r => r.id !== id)
+  }
+
+  // 單筆收款 / 沖帳（Phase 3，支援部分收款）
+  async function collectReceivable(id, payload) {
+    const res = await apiFetch(`${API_URL}/${id}/collect`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || '收款失敗')
+    const result = await res.json()
+    receivables.value = receivables.value.map(r => r.id === id ? result.receivable : r)
+    return result
+  }
+
   return {
     receivables,
     recLoading,
@@ -62,5 +115,10 @@ export function useReceivables() {
     settleBatch,
     waiveReceivable,
     reopenReceivable,
+    batchGenerate,
+    createReceivable,
+    updateReceivable,
+    deleteReceivable,
+    collectReceivable,
   }
 }
