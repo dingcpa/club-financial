@@ -136,3 +136,64 @@ export function resolveRecordAccount(record) {
   if (record.accountCode) return record.accountCode
   return LEGACY_ITEM_MAP[record.item] || null
 }
+
+// ── 表單科目選項（Vuetify grouped select items）──────────────
+
+function leavesOf(accounts) {
+  const list = (accounts || []).filter(a => a.active)
+  const hasChildren = new Set(list.filter(a => a.parentCode).map(a => a.parentCode))
+  return list.filter(a => !hasChildren.has(a.code))
+}
+
+// 收入單「入帳科目」：收入科目 + 代收付/暫收（負債）科目
+export function incomeAccountOptions(accounts) {
+  const leaves = leavesOf(accounts)
+  const income = leaves.filter(a => a.type === 'income')
+  const liab = leaves.filter(a => a.type === 'liability' && [CODES.AGENCY, CODES.TEMP_RECEIPT].includes(a.code))
+  const items = []
+  if (income.length) {
+    items.push({ type: 'subheader', title: '收入科目' })
+    items.push(...income.map(a => ({ title: `${a.code} ${a.name}`, value: a.code })))
+  }
+  if (liab.length) {
+    items.push({ type: 'divider' }, { type: 'subheader', title: '代收付科目（不計入收支餘絀）' })
+    items.push(...liab.map(a => ({ title: `${a.code} ${a.name}`, value: a.code })))
+  }
+  return items
+}
+
+// 支出單「支出科目」：費用葉節點（依上層科目分組）+ 代收款付出
+export function expenseAccountOptions(accounts) {
+  const list = (accounts || []).filter(a => a.active)
+  const leaves = leavesOf(accounts)
+  const parents = list.filter(a => a.type === 'expense' && !a.parentCode)
+  const items = []
+  for (const p of parents) {
+    const children = leaves.filter(a => a.parentCode === p.code)
+    if (children.length) {
+      items.push({ type: 'subheader', title: `${p.code} ${p.name}` })
+      items.push(...children.map(a => ({ title: `${a.code} ${a.name}`, value: a.code })))
+    } else if (leaves.some(a => a.code === p.code)) {
+      items.push({ title: `${p.code} ${p.name}`, value: p.code })
+    }
+  }
+  const agency = leaves.find(a => a.code === CODES.AGENCY)
+  if (agency) {
+    items.push({ type: 'divider' }, { type: 'subheader', title: '代收付科目（不計入收支餘絀）' })
+    items.push({ title: `${agency.code} ${agency.name}（代收款付出/轉繳）`, value: agency.code })
+  }
+  return items
+}
+
+// 科目代碼 → '4101 社費收入' 顯示字串
+export function accountTitle(accounts, code) {
+  const a = (accounts || []).find(x => x.code === code)
+  return a ? `${a.code} ${a.name}` : (code || '')
+}
+
+// 編輯舊單據時，把 legacy 資金帳戶字串轉為新字彙（'淑華代收付' → '經手人:陳淑華'）
+export function normalizeFundValue(str) {
+  const resolved = resolveFundAccount(str)
+  if (!resolved) return str || BANK_NAME
+  return resolved.code === CODES.HANDLER ? handlerFundValue(resolved.person) : BANK_NAME
+}

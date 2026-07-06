@@ -3,7 +3,7 @@
     <v-card-title class="d-flex justify-space-between align-center pa-3 pa-sm-4">
       <div class="d-flex align-center ga-2">
         <v-icon color="error">mdi-minus-circle</v-icon>
-        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯支出單' : '填寫支出單' }}</span>
+        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯支出單' : '新增支出單' }}</span>
       </div>
       <v-btn v-if="editingRecord" icon variant="tonal" size="small" @click="handleCancelEdit">
         <v-icon>mdi-close</v-icon>
@@ -17,41 +17,61 @@
             <v-text-field v-model="formData.date" label="支出日期" type="date" density="compact" variant="outlined" required />
           </v-col>
           <v-col cols="12" sm="6">
-            <v-select v-model="formData.account" label="付款人" :items="ACCOUNTS" density="compact" variant="outlined" required />
+            <v-select
+              v-model="formData.account"
+              label="付款帳戶 / 經手人"
+              :items="fundOptions"
+              density="compact" variant="outlined" required
+              hint="選經手人＝由其代墊付款（其他應付款），歸墊時開內部轉帳單"
+            />
           </v-col>
         </v-row>
 
         <v-select
-          v-model="selectedItem"
-          label="項目名稱"
-          :items="[...PRESET_EXPENSES, 'CUSTOM']"
-          :item-title="i => i === 'CUSTOM' ? '+ 新增自定義項目...' : i"
-          density="compact"
-          variant="outlined"
-          required
+          v-model="formData.accountCode"
+          label="支出科目"
+          :items="acctOptions"
+          density="compact" variant="outlined" required
+          prepend-inner-icon="mdi-book-open-variant"
           class="mb-2"
-          @update:model-value="handleItemChange"
+          @update:model-value="handleAccountChange"
         />
 
         <v-text-field
-          v-if="isCustom"
-          v-model="formData.customItem"
-          label="自定義項目名稱"
-          placeholder="例如：裝修費、活動費..."
-          density="compact"
-          variant="outlined"
-          required
-          class="mb-2"
+          v-model="formData.item"
+          label="摘要"
+          placeholder="例如：7月例會餐費、講師車馬費"
+          density="compact" variant="outlined" required class="mb-2"
         />
 
-        <!-- 平攤設定 -->
-        <v-card variant="outlined" class="pa-2 pa-sm-3 mb-3" rounded="lg">
+        <v-row dense>
+          <v-col cols="12" sm="6">
+            <v-autocomplete
+              v-model="formData.member"
+              label="社友姓名（選填，受款/歸屬對象）"
+              :items="memberOptions"
+              item-title="label" item-value="name"
+              density="compact" variant="outlined" clearable
+              prepend-inner-icon="mdi-account"
+            />
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-select
+              v-model="formData.projectId"
+              label="專案類別（選填）"
+              :items="projectOptions"
+              density="compact" variant="outlined" clearable
+              prepend-inner-icon="mdi-folder-star-outline"
+            />
+          </v-col>
+        </v-row>
+
+        <!-- 平攤設定（預付性質費用 → 預付費用逐月攤銷） -->
+        <v-card v-if="isExpenseAccount" variant="outlined" class="pa-2 pa-sm-3 mb-3" rounded="lg">
           <v-checkbox
             v-model="formData.isPrepaid"
-            label="此筆為「跨月份平攤」費用（預付性質）"
-            color="primary"
-            density="compact"
-            hide-details
+            label="此筆為「跨月份平攤」費用（預付性質，逐月攤銷）"
+            color="primary" density="compact" hide-details
           />
           <div v-if="formData.isPrepaid" class="mt-3">
             <v-row dense align="center">
@@ -59,37 +79,27 @@
                 <label class="text-caption text-medium-emphasis d-block mb-1">開始年月</label>
                 <v-text-field v-model="formData.startPeriod" type="month" density="compact" variant="outlined" hide-details required @update:model-value="handleStartPeriodChange" />
               </v-col>
-              <v-col cols="2" class="text-center">
-                <v-icon>mdi-arrow-right</v-icon>
-              </v-col>
+              <v-col cols="2" class="text-center"><v-icon>mdi-arrow-right</v-icon></v-col>
               <v-col cols="5">
                 <label class="text-caption text-medium-emphasis d-block mb-1">結束年月</label>
                 <v-text-field v-model="formData.endPeriod" type="month" density="compact" variant="outlined" hide-details required />
               </v-col>
             </v-row>
             <div class="text-caption text-medium-emphasis font-italic mt-2">
-              系統將依照你選擇的年月區間，自動將總金額平均分攤至各月報表。
+              系統將依照你選擇的年月區間，自動將總金額平均攤銷至各月報表。
             </div>
           </div>
         </v-card>
 
         <v-text-field
           v-model="formData.amount"
-          label="金額 (NT$)"
-          type="number"
-          density="compact"
-          variant="outlined"
-          required
-          class="mb-2"
+          label="金額 (NT$)" type="number"
+          density="compact" variant="outlined" required class="mb-2"
         />
 
         <v-textarea
-          v-model="formData.remark"
-          label="備註"
-          rows="3"
-          density="compact"
-          variant="outlined"
-          class="mb-3"
+          v-model="formData.remark" label="備註" rows="3"
+          density="compact" variant="outlined" class="mb-3"
         />
 
         <div class="d-flex flex-wrap ga-2">
@@ -105,32 +115,46 @@
 </template>
 
 <script setup>
-import { ref, watch, inject } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
+import Swal from 'sweetalert2'
+import {
+  expenseAccountOptions, buildFundAccountOptions, normalizeFundValue,
+  resolveRecordAccount, accountTitle, BANK_NAME,
+} from '../accounting/coa.js'
 
+const members = inject('members')
+const accounts = inject('accounts')
+const projects = inject('projects')
 const editingRecord = inject('editingRecord')
 const addRecord = inject('addRecord')
 const updateRecord = inject('updateRecord')
 const deleteRecord = inject('deleteRecord')
 const handleCancelEdit = inject('handleCancelEdit')
 
-const ACCOUNTS = ['淑華代收付', '一銀帳戶', '社長代收付']
-const PRESET_EXPENSES = [
-  '辨公室租金及水電', '人事費 -薪資/油資', '文具費', '郵電費', '健保費', '印刷費',
-  '雜費及設備更新', '助秘提撥金', '例會餐費(一般/聯合)', '例會餐費(女賓夕/眷屬聯歡)',
-  '資訊維修費(含地區網站)', '健遊活動', '演講車馬費', '爐邊會', '金蘭聯誼', '高球費用',
-  '職業參觀', '授證之旅補助', '還社長', '研習班', '服務計畫委員會', '社員發展委員會',
-  '扶輪基金委員會', '公共關係委員會', '預備費'
-]
 const currentMonth = new Date().toISOString().substring(0, 7)
+
+const acctOptions = computed(() => expenseAccountOptions(accounts?.value))
+const fundOptions = computed(() => buildFundAccountOptions(members?.value))
+const projectOptions = computed(() =>
+  (projects?.value || []).filter(p => p.active).map(p => ({ title: p.name, value: p.id }))
+)
+const memberOptions = computed(() =>
+  (members.value || []).map(m => ({ name: m.name, label: `${m.name} ${m.nickname || ''} ${m.jobTitle1 ? '·' + m.jobTitle1 : ''}` }))
+)
+
+// 只有「費用科目」可平攤（代收款付出不影響餘絀）
+const isExpenseAccount = computed(() => (formData.value.accountCode || '').startsWith('5'))
 
 function makeDefaultForm() {
   return {
     date: new Date().toISOString().split('T')[0],
-    item: PRESET_EXPENSES[0],
-    customItem: '',
+    accountCode: null,
+    item: '',
+    member: '',
+    projectId: null,
+    account: BANK_NAME,
     amount: '',
     remark: '',
-    account: '淑華代收付',
     isPrepaid: false,
     startPeriod: currentMonth,
     endPeriod: currentMonth,
@@ -138,36 +162,31 @@ function makeDefaultForm() {
 }
 
 const formData = ref(makeDefaultForm())
-const isCustom = ref(false)
-const selectedItem = ref(PRESET_EXPENSES[0])
 
 watch(editingRecord, (ed) => {
   if (ed) {
-    const isPreset = PRESET_EXPENSES.includes(ed.item)
     formData.value = {
       date: ed.date,
-      item: isPreset ? ed.item : 'CUSTOM',
-      customItem: isPreset ? '' : ed.item,
+      accountCode: ed.accountCode || resolveRecordAccount(ed) || null,
+      item: ed.item,
+      member: ed.member || '',
+      projectId: ed.projectId || null,
+      account: normalizeFundValue(ed.account),
       amount: ed.amount,
       remark: ed.remark || '',
-      account: ed.account || '淑華代收付',
       isPrepaid: !!(ed.startPeriod && ed.endPeriod),
       startPeriod: ed.startPeriod || currentMonth,
       endPeriod: ed.endPeriod || currentMonth,
     }
-    selectedItem.value = isPreset ? ed.item : 'CUSTOM'
-    isCustom.value = !isPreset
   }
 }, { immediate: true })
 
-function handleItemChange(val) {
-  if (val === 'CUSTOM') {
-    isCustom.value = true
-    formData.value.item = 'CUSTOM'
-  } else {
-    isCustom.value = false
-    formData.value.item = val
-  }
+function handleAccountChange(code) {
+  const name = accountTitle(accounts?.value, code).replace(/^\d+\s*/, '')
+  const prevIsAuto = !formData.value.item ||
+    (accounts?.value || []).some(a => a.name === formData.value.item)
+  if (prevIsAuto) formData.value.item = name
+  if (!isExpenseAccount.value) formData.value.isPrepaid = false
 }
 
 function handleStartPeriodChange(val) {
@@ -176,30 +195,34 @@ function handleStartPeriodChange(val) {
 }
 
 async function handleSubmit() {
-  const finalItem = isCustom.value ? formData.value.customItem : formData.value.item
-  if (!finalItem || !formData.value.amount) return
+  if (!formData.value.accountCode) {
+    Swal.fire({ icon: 'warning', title: '請選擇支出科目', confirmButtonColor: '#4f46e5' })
+    return
+  }
+  if (!formData.value.item || !formData.value.amount) return
+  const usePrepaid = isExpenseAccount.value && formData.value.isPrepaid
   const payload = {
-    ...formData.value,
-    item: finalItem,
     type: 'expense',
-    startPeriod: formData.value.isPrepaid ? formData.value.startPeriod : null,
-    endPeriod: formData.value.isPrepaid ? formData.value.endPeriod : null,
+    date: formData.value.date,
+    item: formData.value.item,
+    member: formData.value.member || '',
+    account: formData.value.account,
+    accountCode: formData.value.accountCode,
+    projectId: formData.value.projectId || null,
+    amount: formData.value.amount,
+    remark: formData.value.remark,
+    startPeriod: usePrepaid ? formData.value.startPeriod : null,
+    endPeriod: usePrepaid ? formData.value.endPeriod : null,
   }
   if (editingRecord.value) {
     await updateRecord(editingRecord.value.id, payload)
   } else {
     await addRecord(payload)
-    resetForm()
+    formData.value = makeDefaultForm()
   }
 }
 
 async function handleDelete() {
   if (editingRecord.value) await deleteRecord(editingRecord.value.id)
-}
-
-function resetForm() {
-  formData.value = makeDefaultForm()
-  selectedItem.value = PRESET_EXPENSES[0]
-  isCustom.value = false
 }
 </script>

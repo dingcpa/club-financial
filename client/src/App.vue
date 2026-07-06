@@ -206,15 +206,15 @@ const memberItems = [
   { tab: 'receivables', icon: 'mdi-file-document-check', title: '應收帳款' },
   { tab: 'members', icon: 'mdi-account-multiple', title: '社友名冊' },
   { tab: 'agency', icon: 'mdi-hand-coin', title: '代收代付' },
-  { tab: 'categories', icon: 'mdi-tag-multiple', title: '帳款類別設定' },
+  { tab: 'categories', icon: 'mdi-tag-multiple', title: '科目與類別設定' },
 ]
 const transactionItems = [
-  { tab: 'income', icon: 'mdi-plus-circle', title: '其他收入登錄' },
+  { tab: 'income', icon: 'mdi-plus-circle', title: '新增收入單' },
   { tab: 'income-list', icon: 'mdi-magnify', title: '查詢收入單' },
   { tab: 'expense', icon: 'mdi-minus-circle', title: '新增支出單' },
   { tab: 'expense-list', icon: 'mdi-magnify', title: '查詢支出單' },
-  { tab: 'transfer', icon: 'mdi-swap-horizontal', title: '新增調撥單' },
-  { tab: 'transfer-list', icon: 'mdi-magnify', title: '查詢調撥單' },
+  { tab: 'transfer', icon: 'mdi-swap-horizontal', title: '新增內部轉帳單' },
+  { tab: 'transfer-list', icon: 'mdi-magnify', title: '查詢轉帳單' },
 ]
 const adminItems = [
   { tab: 'user-management', icon: 'mdi-account-key', title: '帳號管理' },

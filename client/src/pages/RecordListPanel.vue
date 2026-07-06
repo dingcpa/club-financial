@@ -28,6 +28,7 @@
             <tr>
               <th class="text-caption">日期</th>
               <th class="text-caption">{{ type === 'transfer' ? '帳戶' : '項目' }}</th>
+              <th v-if="type !== 'transfer'" class="text-caption d-none d-sm-table-cell">科目 / 專案</th>
               <th v-if="type !== 'transfer'" class="text-caption">對象 / 帳戶</th>
               <th class="text-right text-caption">金額</th>
               <th class="text-caption d-none d-sm-table-cell">備註</th>
@@ -36,7 +37,7 @@
           </thead>
           <tbody>
             <tr v-if="paged.length === 0">
-              <td :colspan="type !== 'transfer' ? 6 : 5" class="text-center text-medium-emphasis pa-12">
+              <td :colspan="type !== 'transfer' ? 7 : 5" class="text-center text-medium-emphasis pa-12">
                 {{ search ? '查無符合的記錄' : '尚無記錄' }}
               </td>
             </tr>
@@ -50,13 +51,17 @@
               <td class="text-caption text-medium-emphasis" style="white-space:nowrap">{{ toMinguoDate(r.date) }}</td>
               <td>
                 <span v-if="type === 'transfer'" class="text-caption text-primary font-weight-medium">
-                  {{ r.fromAccount }} → {{ r.toAccount }}
+                  {{ fundAccountLabel(r.fromAccount) }} → {{ fundAccountLabel(r.toAccount) }}
                 </span>
                 <span v-else class="text-caption font-weight-medium">{{ r.item }}</span>
               </td>
+              <td v-if="type !== 'transfer'" class="text-caption d-none d-sm-table-cell">
+                <span v-if="acctOf(r)" class="text-medium-emphasis">{{ acctOf(r) }}</span>
+                <v-chip v-if="projectOf(r)" size="x-small" variant="tonal" color="primary" class="ml-1">{{ projectOf(r) }}</v-chip>
+              </td>
               <td v-if="type !== 'transfer'" class="text-caption">
-                <span v-if="type === 'income' && r.member" class="text-primary">{{ r.member }}</span>
-                <span v-if="r.account" :class="r.member ? 'text-medium-emphasis ml-1' : ''">{{ r.account }}</span>
+                <span v-if="r.member" class="text-primary">{{ r.member }}</span>
+                <span v-if="r.account" :class="r.member ? 'text-medium-emphasis ml-1' : ''">{{ fundAccountLabel(r.account) }}</span>
               </td>
               <td class="text-right text-caption font-weight-bold" :style="`color:${cfg.colorHex}`" style="white-space:nowrap">
                 {{ cfg.sign !== '⇄' ? cfg.sign : '' }}{{ Math.abs(r.amount).toLocaleString() }}
@@ -88,13 +93,26 @@
 
 <script setup>
 import { ref, computed, inject } from 'vue'
+import { fundAccountLabel, resolveRecordAccount, accountTitle } from '../accounting/coa.js'
 
 const PAGE_SIZE = 15
 
 const records = inject('records')
+const accounts = inject('accounts')
+const projects = inject('projects')
 const activeTab = inject('activeTab')
 const editingRecord = inject('editingRecord')
 const handleEditClick = inject('handleEditClick')
+
+function acctOf(r) {
+  const code = resolveRecordAccount(r)
+  return code ? accountTitle(accounts?.value, code) : ''
+}
+
+function projectOf(r) {
+  if (!r.projectId) return ''
+  return (projects?.value || []).find(p => p.id === r.projectId)?.name || ''
+}
 
 const search = ref('')
 const page = ref(1)
@@ -102,7 +120,7 @@ const page = ref(1)
 const TYPE_CONFIG = {
   income:   { label: '收入單', color: 'success', colorHex: '#10b981', bgColor: '#f0fdf4', borderColor: '#bbf7d0', sign: '+',  icon: 'mdi-trending-up' },
   expense:  { label: '支出單', color: 'error',   colorHex: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca', sign: '-',  icon: 'mdi-trending-down' },
-  transfer: { label: '調撥單', color: 'primary',  colorHex: '#4f46e5', bgColor: '#f0f4ff', borderColor: '#c7d2fe', sign: '⇄', icon: 'mdi-swap-horizontal' },
+  transfer: { label: '內部轉帳單', color: 'primary',  colorHex: '#4f46e5', bgColor: '#f0f4ff', borderColor: '#c7d2fe', sign: '⇄', icon: 'mdi-swap-horizontal' },
 }
 
 const type = computed(() => {
