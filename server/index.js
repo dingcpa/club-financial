@@ -157,7 +157,7 @@ app.get('/api/dues-settings', async (req, res) => {
 
 app.post('/api/dues-settings', async (req, res) => {
     try {
-        const { category, dueDate, standardAmount, kind, incomeAccount } = req.body;
+        const { category, dueDate, standardAmount, kind, incomeAccount, accountCode, periodMonths } = req.body;
         const [existing] = await pool.query('SELECT category FROM dues_settings WHERE category=?', [category]);
         if (existing.length > 0) return res.status(400).json({ error: 'Category already exists' });
         const newSetting = {
@@ -166,6 +166,8 @@ app.post('/api/dues-settings', async (req, res) => {
             standardAmount: parseFloat(standardAmount) || 0,
             kind: kind || 'dues',
             incomeAccount: incomeAccount || null,
+            accountCode: accountCode || null,
+            periodMonths: periodMonths ? parseInt(periodMonths) : null,
         };
         await pool.query('INSERT INTO dues_settings SET ?', [newSetting]);
         // 自動為所有社員產生應收
@@ -179,7 +181,7 @@ app.post('/api/dues-settings', async (req, res) => {
 app.put('/api/dues-settings/:category', async (req, res) => {
     try {
         const oldCategory = req.params.category;
-        const { category, dueDate, standardAmount, kind, incomeAccount } = req.body;
+        const { category, dueDate, standardAmount, kind, incomeAccount, accountCode, periodMonths } = req.body;
         const [rows] = await pool.query('SELECT * FROM dues_settings WHERE category=?', [oldCategory]);
         if (rows.length === 0) return res.status(404).json({ error: 'Setting not found' });
         const current = rows[0];
@@ -189,6 +191,8 @@ app.put('/api/dues-settings/:category', async (req, res) => {
             standardAmount: standardAmount !== undefined ? parseFloat(standardAmount) : current.standardAmount,
             kind:           kind           !== undefined ? kind           : (current.kind || 'dues'),
             incomeAccount:  incomeAccount  !== undefined ? incomeAccount  : (current.incomeAccount || null),
+            accountCode:    accountCode    !== undefined ? (accountCode || null) : (current.accountCode || null),
+            periodMonths:   periodMonths   !== undefined ? (periodMonths ? parseInt(periodMonths) : null) : (current.periodMonths || null),
         };
         if (updated.category !== oldCategory) {
             // Category rename: insert new row then delete old
@@ -237,7 +241,7 @@ app.get('/api/finance', async (req, res) => {
 
 app.post('/api/finance', async (req, res) => {
     try {
-        const { type, date, item, amount, remark, member, account, fromAccount, toAccount, startPeriod, endPeriod } = req.body;
+        const { type, date, item, amount, remark, member, account, fromAccount, toAccount, startPeriod, endPeriod, accountCode, projectId, sourceReceivableId } = req.body;
         if (!type || !date || !item || !amount) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
@@ -252,6 +256,9 @@ app.post('/api/finance', async (req, res) => {
             remark:      remark      || '',
             startPeriod: startPeriod || null,
             endPeriod:   endPeriod   || null,
+            accountCode: accountCode || null,
+            projectId:   projectId   || null,
+            sourceReceivableId: sourceReceivableId || null,
         };
         await pool.query('INSERT INTO finance SET ?', [newRecord]);
         res.status(201).json(newRecord);
@@ -283,7 +290,7 @@ app.post('/api/finance/batch', async (req, res) => {
 app.put('/api/finance/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const { date, item, amount, remark, member, account, fromAccount, toAccount, startPeriod, endPeriod } = req.body;
+        const { date, item, amount, remark, member, account, fromAccount, toAccount, startPeriod, endPeriod, accountCode, projectId } = req.body;
         const [rows] = await pool.query('SELECT * FROM finance WHERE id=?', [id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Record not found' });
         const current = rows[0];
@@ -298,6 +305,8 @@ app.put('/api/finance/:id', async (req, res) => {
             toAccount:   toAccount   !== undefined ? toAccount   : (current.toAccount || ''),
             startPeriod: startPeriod !== undefined ? startPeriod : current.startPeriod,
             endPeriod:   endPeriod   !== undefined ? endPeriod   : current.endPeriod,
+            accountCode: accountCode !== undefined ? (accountCode || null) : current.accountCode,
+            projectId:   projectId   !== undefined ? (projectId   || null) : current.projectId,
         };
         await pool.query('UPDATE finance SET ? WHERE id=?', [updated, id]);
         res.json({ ...current, ...updated });
@@ -918,6 +927,297 @@ function getAutoPeriodServer(itemName) {
         end:   match[2].padStart(2, '0'),
     };
 }
+
+// ─── Accounts（會計科目表）──────────────────────────────────
+app.get('/api/accounts', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM accounts ORDER BY sortOrder ASC, code ASC');
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read accounts' });
+    }
+});
+
+app.post('/api/accounts', async (req, res) => {
+    try {
+        const { code, name, type, parentCode, isCash, requiresPerson, sortOrder } = req.body;
+        if (!code || !name || !type) return res.status(400).json({ error: '科目代碼、名稱、類型為必填' });
+        if (!['asset', 'liability', 'equity', 'income', 'expense'].includes(type)) {
+            return res.status(400).json({ error: '科目類型不正確' });
+        }
+        if (parentCode) {
+            const [p] = await pool.query('SELECT code, type FROM accounts WHERE code=?', [parentCode]);
+            if (!p.length) return res.status(400).json({ error: '上層科目不存在' });
+            if (p[0].type !== type) return res.status(400).json({ error: '細項類型須與上層科目相同' });
+        }
+        try {
+            await pool.query(
+                'INSERT INTO accounts (code, name, type, parentCode, isCash, isSystem, requiresPerson, sortOrder) VALUES (?,?,?,?,?,0,?,?)',
+                [code, name, type, parentCode || null, isCash ? 1 : 0, requiresPerson ? 1 : 0, sortOrder || 999]
+            );
+        } catch (e) {
+            if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '科目代碼已存在' });
+            throw e;
+        }
+        const [rows] = await pool.query('SELECT * FROM accounts WHERE code=?', [code]);
+        res.status(201).json(rows[0]);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to create account' });
+    }
+});
+
+app.put('/api/accounts/:code', async (req, res) => {
+    try {
+        const code = req.params.code;
+        const [rows] = await pool.query('SELECT * FROM accounts WHERE code=?', [code]);
+        if (!rows.length) return res.status(404).json({ error: 'Account not found' });
+        const cur = rows[0];
+        const { name, parentCode, isCash, requiresPerson, sortOrder, active } = req.body;
+        // 系統科目：僅允許改名稱與排序（引擎依 code/type 推導分錄）
+        const updated = {
+            name:      name      !== undefined ? name : cur.name,
+            sortOrder: sortOrder !== undefined ? sortOrder : cur.sortOrder,
+        };
+        if (!cur.isSystem) {
+            if (parentCode !== undefined)      updated.parentCode = parentCode || null;
+            if (isCash !== undefined)          updated.isCash = isCash ? 1 : 0;
+            if (requiresPerson !== undefined)  updated.requiresPerson = requiresPerson ? 1 : 0;
+            if (active !== undefined)          updated.active = active ? 1 : 0;
+        }
+        await pool.query('UPDATE accounts SET ? WHERE code=?', [updated, code]);
+        const [r2] = await pool.query('SELECT * FROM accounts WHERE code=?', [code]);
+        res.json(r2[0]);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to update account' });
+    }
+});
+
+app.delete('/api/accounts/:code', async (req, res) => {
+    try {
+        const code = req.params.code;
+        const [rows] = await pool.query('SELECT * FROM accounts WHERE code=?', [code]);
+        if (!rows.length) return res.status(404).json({ error: 'Account not found' });
+        if (rows[0].isSystem) return res.status(400).json({ error: '系統科目不可刪除' });
+        const [children] = await pool.query('SELECT code FROM accounts WHERE parentCode=?', [code]);
+        if (children.length) return res.status(400).json({ error: '此科目下仍有細項，不可刪除' });
+        const [used] = await pool.query('SELECT COUNT(*) AS cnt FROM finance WHERE accountCode=?', [code]);
+        if (used[0].cnt > 0) return res.status(400).json({ error: `已有 ${used[0].cnt} 筆單據使用此科目，不可刪除（可改為停用）` });
+        await pool.query('DELETE FROM accounts WHERE code=?', [code]);
+        res.json({ message: 'Account deleted' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete account' });
+    }
+});
+
+// ─── Projects（專案類別）────────────────────────────────────
+app.get('/api/projects', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM projects ORDER BY sortOrder ASC, id ASC');
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read projects' });
+    }
+});
+
+app.post('/api/projects', async (req, res) => {
+    try {
+        const { name, sortOrder } = req.body;
+        if (!name) return res.status(400).json({ error: '專案名稱為必填' });
+        const id = Date.now();
+        try {
+            await pool.query('INSERT INTO projects (id, name, sortOrder) VALUES (?,?,?)', [id, name, sortOrder || 999]);
+        } catch (e) {
+            if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '專案名稱已存在' });
+            throw e;
+        }
+        const [rows] = await pool.query('SELECT * FROM projects WHERE id=?', [id]);
+        res.status(201).json(rows[0]);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to create project' });
+    }
+});
+
+app.put('/api/projects/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { name, active, sortOrder } = req.body;
+        const updated = {};
+        if (name !== undefined) updated.name = name;
+        if (active !== undefined) updated.active = active ? 1 : 0;
+        if (sortOrder !== undefined) updated.sortOrder = sortOrder;
+        if (!Object.keys(updated).length) return res.status(400).json({ error: '無可更新欄位' });
+        const [result] = await pool.query('UPDATE projects SET ? WHERE id=?', [updated, id]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Project not found' });
+        const [rows] = await pool.query('SELECT * FROM projects WHERE id=?', [id]);
+        res.json(rows[0]);
+    } catch (e) {
+        if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '專案名稱已存在' });
+        res.status(500).json({ error: 'Failed to update project' });
+    }
+});
+
+app.delete('/api/projects/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [used] = await pool.query('SELECT COUNT(*) AS cnt FROM finance WHERE projectId=?', [id]);
+        if (used[0].cnt > 0) return res.status(400).json({ error: `已有 ${used[0].cnt} 筆單據使用此專案，不可刪除（可改為停用）` });
+        const [result] = await pool.query('DELETE FROM projects WHERE id=?', [id]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Project not found' });
+        res.json({ message: 'Project deleted' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete project' });
+    }
+});
+
+// ─── App Settings（系統參數）────────────────────────────────
+app.get('/api/settings', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT k, v FROM app_settings');
+        const settings = {};
+        for (const r of rows) settings[r.k] = r.v;
+        res.json(settings);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read settings' });
+    }
+});
+
+app.put('/api/settings', adminOnly, async (req, res) => {
+    try {
+        const entries = Object.entries(req.body || {});
+        if (!entries.length) return res.status(400).json({ error: '無可更新設定' });
+        for (const [k, v] of entries) {
+            await pool.query('INSERT INTO app_settings (k, v) VALUES (?,?) ON DUPLICATE KEY UPDATE v=?', [k, String(v), String(v)]);
+        }
+        res.json({ message: '設定已更新' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to update settings' });
+    }
+});
+
+// ─── Manual Journals（手工傳票）─────────────────────────────
+async function validateJournalLines(lines) {
+    if (!Array.isArray(lines) || lines.length < 2) return '傳票至少需要兩行分錄';
+    let debit = 0, credit = 0;
+    const [accounts] = await pool.query('SELECT code, requiresPerson, parentCode, type FROM accounts');
+    const byCode = Object.fromEntries(accounts.map(a => [a.code, a]));
+    const hasChildren = new Set(accounts.filter(a => a.parentCode).map(a => a.parentCode));
+    for (const line of lines) {
+        const acct = byCode[line.accountCode];
+        if (!acct) return `科目 ${line.accountCode} 不存在`;
+        if (hasChildren.has(acct.code)) return `科目 ${acct.code} 下設有細項，請選擇細項科目`;
+        if (acct.requiresPerson && !line.person) return `科目 ${line.accountCode} 需指定對象（人員/案名）`;
+        const d = parseFloat(line.debit) || 0;
+        const c = parseFloat(line.credit) || 0;
+        if (d < 0 || c < 0) return '借貸金額不可為負數';
+        if ((d > 0) === (c > 0)) return '每行分錄須為借方或貸方擇一';
+        debit += d; credit += c;
+    }
+    if (Math.round(debit * 100) !== Math.round(credit * 100)) {
+        return `借貸不平衡（借 ${debit} / 貸 ${credit}）`;
+    }
+    return null;
+}
+
+function parseJournal(row) {
+    return { ...row, lines: JSON.parse(row.lines || '[]') };
+}
+
+app.get('/api/manual-journals', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM manual_journals ORDER BY date DESC, id DESC');
+        res.json(rows.map(parseJournal));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read manual journals' });
+    }
+});
+
+app.post('/api/manual-journals', async (req, res) => {
+    try {
+        const { date, description, lines } = req.body;
+        if (!date) return res.status(400).json({ error: '缺少傳票日期' });
+        const err = await validateJournalLines(lines);
+        if (err) return res.status(400).json({ error: err });
+        const journal = {
+            id: Date.now(),
+            date,
+            description: description || '',
+            lines: JSON.stringify(lines),
+            createdBy: req.user.username,
+        };
+        await pool.query('INSERT INTO manual_journals SET ?', [journal]);
+        res.status(201).json(parseJournal(journal));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to create manual journal' });
+    }
+});
+
+app.put('/api/manual-journals/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [rows] = await pool.query('SELECT * FROM manual_journals WHERE id=?', [id]);
+        if (!rows.length) return res.status(404).json({ error: 'Journal not found' });
+        const { date, description, lines } = req.body;
+        const err = await validateJournalLines(lines !== undefined ? lines : JSON.parse(rows[0].lines));
+        if (err) return res.status(400).json({ error: err });
+        const updated = {
+            date:        date        !== undefined ? date : rows[0].date,
+            description: description !== undefined ? description : rows[0].description,
+            lines:       lines       !== undefined ? JSON.stringify(lines) : rows[0].lines,
+        };
+        await pool.query('UPDATE manual_journals SET ? WHERE id=?', [updated, id]);
+        const [r2] = await pool.query('SELECT * FROM manual_journals WHERE id=?', [id]);
+        res.json(parseJournal(r2[0]));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to update manual journal' });
+    }
+});
+
+app.delete('/api/manual-journals/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [result] = await pool.query('DELETE FROM manual_journals WHERE id=?', [id]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Journal not found' });
+        res.json({ message: 'Journal deleted' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete manual journal' });
+    }
+});
+
+// ─── Opening Balances（期初餘額）────────────────────────────
+app.get('/api/opening-balances', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM opening_balances ORDER BY accountCode ASC, person ASC');
+        res.json(rows.map(r => ({ ...r, debit: parseFloat(r.debit) || 0, credit: parseFloat(r.credit) || 0 })));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read opening balances' });
+    }
+});
+
+// 以基準日為單位整批覆寫（期初盤點一次輸入）
+app.put('/api/opening-balances', adminOnly, async (req, res) => {
+    try {
+        const { baseDate, rows } = req.body;
+        if (!baseDate || !Array.isArray(rows)) return res.status(400).json({ error: '缺少基準日或期初明細' });
+        const [accounts] = await pool.query('SELECT code FROM accounts');
+        const codes = new Set(accounts.map(a => a.code));
+        for (const r of rows) {
+            if (!codes.has(r.accountCode)) return res.status(400).json({ error: `科目 ${r.accountCode} 不存在` });
+        }
+        await pool.query('DELETE FROM opening_balances WHERE baseDate=?', [baseDate]);
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i];
+            await pool.query(
+                'INSERT INTO opening_balances (id, baseDate, accountCode, person, debit, credit, remark) VALUES (?,?,?,?,?,?,?)',
+                [Date.now() + i, baseDate, r.accountCode, r.person || '', parseFloat(r.debit) || 0, parseFloat(r.credit) || 0, r.remark || '']
+            );
+        }
+        const [saved] = await pool.query('SELECT * FROM opening_balances WHERE baseDate=?', [baseDate]);
+        res.json(saved.map(r => ({ ...r, debit: parseFloat(r.debit) || 0, credit: parseFloat(r.credit) || 0 })));
+    } catch (e) {
+        console.error('Error saving opening balances:', e);
+        res.status(500).json({ error: 'Failed to save opening balances' });
+    }
+});
 
 // ─── Users ─────────────────────────────────────────────────
 app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {

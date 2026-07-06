@@ -150,6 +150,11 @@ import { useMembers } from './composables/useMembers.js'
 import { useDues } from './composables/useDues.js'
 import { useAgencyCollections } from './composables/useAgencyCollections.js'
 import { useReceivables } from './composables/useReceivables.js'
+import { useAccounts } from './composables/useAccounts.js'
+import { useProjects } from './composables/useProjects.js'
+import { useAppSettings } from './composables/useAppSettings.js'
+import { useManualJournals } from './composables/useManualJournals.js'
+import { useOpeningBalances } from './composables/useOpeningBalances.js'
 
 import LoginPage from './pages/LoginPage.vue'
 import Summary from './pages/Summary.vue'
@@ -183,6 +188,11 @@ const { members, memLoading, fetchMembers, addMember: apiAddMember, updateMember
 const { duesSettings, fetchDuesSettings, addDuesSetting, updateDuesSetting, deleteDuesSetting } = useDues()
 const { agencyCollections, agencyLoading, fetchAgencyCollections, createCollection, recordPayment, removePayment, closeCollection, deleteCollection } = useAgencyCollections()
 const { receivables, recLoading, fetchReceivables, fetchOutstanding, settleBatch, waiveReceivable, reopenReceivable, batchGenerate, createReceivable, updateReceivable, deleteReceivable, collectReceivable } = useReceivables()
+const { accounts, fetchAccounts, addAccount, updateAccount, deleteAccount } = useAccounts()
+const { projects, fetchProjects, addProject, updateProject, deleteProject } = useProjects()
+const { appSettings, fetchAppSettings, saveAppSettings } = useAppSettings()
+const { manualJournals, fetchManualJournals, addManualJournal, updateManualJournal, deleteManualJournal } = useManualJournals()
+const { openingBalances, fetchOpeningBalances, saveOpeningBalances } = useOpeningBalances()
 
 // ----- 導覽選單定義 -----
 const reportItems = [
@@ -375,12 +385,36 @@ provide('createReceivable', createReceivable)
 provide('updateReceivable', updateReceivable)
 provide('deleteReceivable', deleteReceivable)
 provide('collectReceivable', collectReceivable)
+provide('accounts', accounts)
+provide('fetchAccounts', fetchAccounts)
+provide('addAccount', addAccount)
+provide('updateAccount', updateAccount)
+provide('deleteAccount', deleteAccount)
+provide('projects', projects)
+provide('fetchProjects', fetchProjects)
+provide('addProject', addProject)
+provide('updateProject', updateProject)
+provide('deleteProject', deleteProject)
+provide('appSettings', appSettings)
+provide('fetchAppSettings', fetchAppSettings)
+provide('saveAppSettings', saveAppSettings)
+provide('manualJournals', manualJournals)
+provide('fetchManualJournals', fetchManualJournals)
+provide('addManualJournal', addManualJournal)
+provide('updateManualJournal', updateManualJournal)
+provide('deleteManualJournal', deleteManualJournal)
+provide('openingBalances', openingBalances)
+provide('fetchOpeningBalances', fetchOpeningBalances)
+provide('saveOpeningBalances', saveOpeningBalances)
 
 // ----- 初始化 -----
 watch(isAuthenticated, (val) => {
   if (val) {
-    const currentYear = new Date().getFullYear().toString()
-    Promise.all([fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections(), fetchReceivables({ year: currentYear })])
+    // 分錄推導引擎需要全量 receivables（不限年度）
+    Promise.all([
+      fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections(), fetchReceivables(),
+      fetchAccounts(), fetchProjects(), fetchAppSettings(), fetchManualJournals(), fetchOpeningBalances(),
+    ])
   }
 }, { immediate: true })
 </script>
