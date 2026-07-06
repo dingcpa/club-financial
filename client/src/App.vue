@@ -163,9 +163,8 @@ import ExpenseForm from './pages/ExpenseForm.vue'
 import TransferForm from './pages/TransferForm.vue'
 import MemberDues from './pages/MemberDues.vue'
 import MemberList from './pages/MemberList.vue'
-import PrepaidIncome from './pages/PrepaidIncome.vue'
-import PrepaidExpense from './pages/PrepaidExpense.vue'
-import AccountSummary from './pages/AccountSummary.vue'
+import BalanceSheet from './pages/BalanceSheet.vue'
+import CashFlow from './pages/CashFlow.vue'
 import AgencyCollection from './pages/AgencyCollection.vue'
 import RecordListPanel from './pages/RecordListPanel.vue'
 import UserManagement from './pages/UserManagement.vue'
@@ -205,9 +204,8 @@ const drillContext = ref(null)
 // ----- 導覽選單定義 -----
 const reportItems = [
   { tab: 'summary', icon: 'mdi-chart-bar', title: '收支月報表' },
-  { tab: 'prepaid-income', icon: 'mdi-piggy-bank', title: '預收收入明細' },
-  { tab: 'prepaid-expense', icon: 'mdi-book-open-variant', title: '預付支出明細' },
-  { tab: 'accounts', icon: 'mdi-bank', title: '資金帳戶明細' },
+  { tab: 'balance-sheet', icon: 'mdi-scale-balance', title: '資產負債表' },
+  { tab: 'cash-flow', icon: 'mdi-cash-fast', title: '現金流量表' },
   { tab: 'ledger', icon: 'mdi-notebook-outline', title: '帳簿查詢' },
 ]
 const memberItems = [
@@ -234,9 +232,8 @@ const adminItems = [
 // ----- 頁面對應 -----
 const pageMap = {
   'summary': Summary,
-  'prepaid-income': PrepaidIncome,
-  'prepaid-expense': PrepaidExpense,
-  'accounts': AccountSummary,
+  'balance-sheet': BalanceSheet,
+  'cash-flow': CashFlow,
   'dues': MemberDues,
   'members': MemberList,
   'agency': AgencyCollection,
