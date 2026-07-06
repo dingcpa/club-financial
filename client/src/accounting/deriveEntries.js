@@ -100,6 +100,8 @@ export function deriveAllEntries({
   // ── 2/3/10. 應收帳款：開單 ＋ 預收逐月轉列 ──────────────────
   for (const r of receivables) {
     if (r.status === 'waived') continue // 免繳視同作廢開單
+    // 基準日前已收訖者，整個生命週期屬歷史（現金已於基準日前入帳），不再產生任何分錄
+    if (r.status === 'paid' && r.paidDate && r.paidDate <= baseDate) continue
     const billDate = r.dueDate || (r.createdAt ? String(r.createdAt).slice(0, 10) : null)
     const code = r.accountCode || null
     const isAgency = r.sourceType === 'agency'

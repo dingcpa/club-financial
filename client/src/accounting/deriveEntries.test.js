@@ -94,6 +94,12 @@ describe('季度社費開單（權責認列）', () => {
     const { entries } = derive({ receivables: [{ ...receivable, status: 'waived' }] })
     expect(entries.length).toBe(0)
   })
+
+  it('基準日前已收訖的帳款（含應收日在基準日後者）不產生任何分錄', () => {
+    const paid = { ...receivable, status: 'paid', paidAmount: 18000, paidDate: '2026-02-20' }
+    const { entries } = derive({ receivables: [paid] })
+    expect(entries.length).toBe(0)
+  })
 })
 
 describe('溢收款', () => {
