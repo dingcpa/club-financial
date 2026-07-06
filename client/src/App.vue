@@ -171,6 +171,10 @@ import RecordListPanel from './pages/RecordListPanel.vue'
 import UserManagement from './pages/UserManagement.vue'
 import ReceivablesSummary from './pages/ReceivablesSummary.vue'
 import CategorySettings from './pages/CategorySettings.vue'
+import LedgerBrowser from './pages/LedgerBrowser.vue'
+import ManualJournal from './pages/ManualJournal.vue'
+import OpeningBalance from './pages/OpeningBalance.vue'
+import { useAccounting } from './composables/useAccounting.js'
 
 // ----- Auth -----
 const { isAuthenticated, isAdmin, user, logout } = useAuth()
@@ -194,12 +198,17 @@ const { appSettings, fetchAppSettings, saveAppSettings } = useAppSettings()
 const { manualJournals, fetchManualJournals, addManualJournal, updateManualJournal, deleteManualJournal } = useManualJournals()
 const { openingBalances, fetchOpeningBalances, saveOpeningBalances } = useOpeningBalances()
 
+// 分錄推導引擎：所有帳簿與報表的資料源
+const accounting = useAccounting({ records, receivables, agencyCollections, manualJournals, openingBalances, accounts, appSettings })
+const drillContext = ref(null)
+
 // ----- 導覽選單定義 -----
 const reportItems = [
   { tab: 'summary', icon: 'mdi-chart-bar', title: '收支月報表' },
   { tab: 'prepaid-income', icon: 'mdi-piggy-bank', title: '預收收入明細' },
   { tab: 'prepaid-expense', icon: 'mdi-book-open-variant', title: '預付支出明細' },
   { tab: 'accounts', icon: 'mdi-bank', title: '資金帳戶明細' },
+  { tab: 'ledger', icon: 'mdi-notebook-outline', title: '帳簿查詢' },
 ]
 const memberItems = [
   { tab: 'dues', icon: 'mdi-format-list-bulleted', title: '社友繳費總覽' },
@@ -215,8 +224,10 @@ const transactionItems = [
   { tab: 'expense-list', icon: 'mdi-magnify', title: '查詢支出單' },
   { tab: 'transfer', icon: 'mdi-swap-horizontal', title: '新增內部轉帳單' },
   { tab: 'transfer-list', icon: 'mdi-magnify', title: '查詢轉帳單' },
+  { tab: 'journal-entry', icon: 'mdi-file-sign', title: '手工傳票' },
 ]
 const adminItems = [
+  { tab: 'opening-balance', icon: 'mdi-scale-balance', title: '期初餘額設定' },
   { tab: 'user-management', icon: 'mdi-account-key', title: '帳號管理' },
 ]
 
@@ -237,12 +248,15 @@ const pageMap = {
   'expense-list': RecordListPanel,
   'transfer': TransferForm,
   'transfer-list': RecordListPanel,
+  'ledger': LedgerBrowser,
+  'journal-entry': ManualJournal,
+  'opening-balance': OpeningBalance,
   'user-management': UserManagement,
 }
 const currentPage = computed(() => pageMap[activeTab.value] || Summary)
 
 // 需要管理員的頁面清單
-const ADMIN_TABS = ['user-management']
+const ADMIN_TABS = ['user-management', 'opening-balance']
 
 // ----- 導覽 -----
 function navigate(tab) {
@@ -406,6 +420,13 @@ provide('deleteManualJournal', deleteManualJournal)
 provide('openingBalances', openingBalances)
 provide('fetchOpeningBalances', fetchOpeningBalances)
 provide('saveOpeningBalances', saveOpeningBalances)
+provide('accounting', accounting)
+provide('drillContext', drillContext)
+// 各報表點金額 → 設定篩選脈絡並切到帳簿查詢分類帳
+provide('drillDown', (ctx) => {
+  drillContext.value = ctx
+  navigate('ledger')
+})
 
 // ----- 初始化 -----
 watch(isAuthenticated, (val) => {
