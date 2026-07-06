@@ -284,7 +284,17 @@
     <!-- Close Dialog -->
     <v-dialog v-model="closeDialog.show" :max-width="xs ? undefined : 400" :fullscreen="xs">
       <v-card class="pa-3 pa-sm-4">
-        <div class="text-subtitle-2 font-weight-bold mb-3">結案備註</div>
+        <div class="text-subtitle-2 font-weight-bold mb-3">結案（付出代收款）</div>
+        <v-select
+          v-model="closeDialog.payAccount"
+          label="付款帳戶 / 經手人"
+          :items="fundOptions"
+          variant="outlined"
+          density="compact"
+          class="mb-2"
+          hint="結案將產生一筆代收款付出的支出單"
+          persistent-hint
+        />
         <v-text-field
           v-model="closeDialog.remark"
           label="結案備註（例如：已轉交給XXX）"
@@ -305,6 +315,7 @@
 import { ref, computed, inject } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
+import { buildFundAccountOptions, handlerFundValue } from '../accounting/coa.js'
 
 const { xs } = useDisplay()
 
@@ -316,11 +327,15 @@ const injRecordPayment = inject('recordPayment')
 const injRemovePayment = inject('removePayment')
 const injCloseCollection = inject('closeCollection')
 const injDeleteCollection = inject('deleteCollection')
+const fetchRecords = inject('fetchRecords')
+const fetchReceivables = inject('fetchReceivables')
+
+const fundOptions = computed(() => buildFundAccountOptions(members?.value))
 
 const showForm = ref(false)
 const expandedId = ref(null)
 const formData = ref({ title: '', defaultAmount: '', targetMembers: [], remark: '' })
-const closeDialog = ref({ show: false, collectionId: null, remark: '' })
+const closeDialog = ref({ show: false, collectionId: null, remark: '', payAccount: null })
 
 async function handleCreate() {
   if (!formData.value.title || formData.value.targetMembers.length === 0) {
@@ -338,12 +353,29 @@ async function handleCreate() {
 }
 
 async function handlePayment(collectionId, memberName, amount) {
-  await injRecordPayment(collectionId, memberName, amount)
+  // 選擇收款帳戶（現金流入帳：借資金/貸應收）
+  const options = {}
+  for (const o of fundOptions.value) options[o.value] = o.title
+  const { value: account, isConfirmed } = await Swal.fire({
+    title: `${memberName} 收款 NT$ ${amount.toLocaleString()}`,
+    input: 'select',
+    inputOptions: options,
+    inputValue: handlerFundValue('陳淑華'),
+    inputLabel: '收款帳戶 / 經手人',
+    showCancelButton: true,
+    confirmButtonText: '確認收款',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#4f46e5',
+  })
+  if (!isConfirmed) return
+  await injRecordPayment(collectionId, memberName, amount, null, account)
+  await Promise.all([fetchRecords(), fetchReceivables()])
 }
 
 async function confirmRemovePayment(collectionId, memberName) {
   const result = await Swal.fire({
     title: `確定要取消 ${memberName} 的收款記錄嗎？`,
+    text: '對應的收款單也會一併刪除。',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonText: '確定取消',
@@ -352,20 +384,22 @@ async function confirmRemovePayment(collectionId, memberName) {
   })
   if (result.isConfirmed) {
     await injRemovePayment(collectionId, memberName)
+    await Promise.all([fetchRecords(), fetchReceivables()])
   }
 }
 
 function openCloseDialog(collection) {
-  closeDialog.value = { show: true, collectionId: collection.id, remark: '' }
+  closeDialog.value = { show: true, collectionId: collection.id, remark: '', payAccount: null }
 }
 
 async function handleClose() {
-  const { collectionId, remark } = closeDialog.value
+  const { collectionId, remark, payAccount } = closeDialog.value
   const collection = collections.value.find(c => c.id === collectionId)
   if (!collection) return
   const totalCollected = collection.paidMembers.reduce((sum, p) => sum + p.amount, 0)
   closeDialog.value.show = false
-  await injCloseCollection(collectionId, totalCollected, remark)
+  await injCloseCollection(collectionId, totalCollected, remark, payAccount)
+  await fetchRecords()
 }
 
 async function handleDelete(collectionId) {

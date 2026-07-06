@@ -188,9 +188,29 @@
           <v-btn icon variant="text" @click="batchModal = false"><v-icon>mdi-close</v-icon></v-btn>
         </v-card-title>
         <v-card-text>
-          <v-select
+          <!-- 季度社費快速開單 -->
+          <v-card variant="tonal" color="primary" class="pa-3 mb-3" rounded="lg">
+            <div class="text-caption font-weight-bold mb-2">季度社費快速開單（每月 {{ monthlyDues.toLocaleString() }} × 3）</div>
+            <v-row dense>
+              <v-col cols="6">
+                <v-select
+                  v-model="quickFy" label="扶輪年度" :items="quickFyOptions"
+                  density="compact" variant="outlined" hide-details
+                />
+              </v-col>
+              <v-col cols="6">
+                <v-select
+                  v-model="quickQuarter" label="季別" :items="quarterOptions"
+                  density="compact" variant="outlined" hide-details
+                  @update:model-value="applyQuickDues"
+                />
+              </v-col>
+            </v-row>
+          </v-card>
+
+          <v-combobox
             v-model="batchForm.category"
-            label="帳款類別（季別）"
+            label="帳款類別"
             :items="categoryOptions"
             density="compact" variant="outlined" class="mb-2"
             @update:model-value="onBatchCategoryChange"
@@ -203,9 +223,14 @@
               <v-text-field v-model="batchForm.dueDate" label="應收日期" type="date" density="compact" variant="outlined" />
             </v-col>
           </v-row>
-          <div v-if="batchForm.incomeAccount" class="text-caption text-medium-emphasis mb-2">
-            對方科目：<strong>{{ batchForm.incomeAccount }}</strong>
-            <span v-if="batchPeriodHint">．認列區間 {{ batchPeriodHint }}（將平均攤提）</span>
+          <v-select
+            v-model="batchForm.accountCode"
+            label="入帳科目"
+            :items="receivableAcctOptions"
+            density="compact" variant="outlined" class="mb-1"
+          />
+          <div v-if="batchPeriodLabel" class="text-caption text-medium-emphasis mb-2">
+            權責認列區間 <strong>{{ batchPeriodLabel }}</strong>：未到期部分列預收社費，逐月自動轉列收入。
           </div>
 
           <div class="d-flex justify-space-between align-center mb-1">
@@ -261,10 +286,10 @@
               <v-text-field v-model="editForm.dueDate" label="應收日期" type="date" density="compact" variant="outlined" />
             </v-col>
           </v-row>
-          <v-combobox
-            v-model="editForm.incomeAccount"
-            label="對方收入科目"
-            :items="ACCOUNT_PRESETS"
+          <v-select
+            v-model="editForm.accountCode"
+            label="入帳科目"
+            :items="receivableAcctOptions"
             density="compact" variant="outlined" class="mb-2"
           />
         </v-card-text>
@@ -300,7 +325,7 @@
               <v-text-field v-model="collectForm.amount" label="沖款金額 (NT$)" type="number" density="compact" variant="outlined" />
             </v-col>
           </v-row>
-          <v-select v-model="collectForm.account" label="收款帳戶" :items="ACCOUNTS" density="compact" variant="outlined" class="mb-1" />
+          <v-select v-model="collectForm.account" label="收款帳戶 / 經手人" :items="fundOptions" density="compact" variant="outlined" class="mb-1" />
           <v-text-field v-model="collectForm.remark" label="備註（選填）" density="compact" variant="outlined" />
           <div v-if="collectOverRemaining" class="text-caption text-warning">
             沖款金額大於未收餘額，將以未收餘額 {{ remainingOf(collectingItem).toLocaleString() }} 沖抵。
@@ -317,13 +342,17 @@
 </template>
 
 <script setup>
-import { ref, computed, inject, watch } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
+import { buildFundAccountOptions, LEGACY_INCOME_ACCOUNT_MAP, CODES } from '../accounting/coa.js'
+import { fyOf, fyLabel, DUES_QUARTERS, duesQuarterPeriod } from '../accounting/fiscal.js'
 
 const { xs } = useDisplay()
 
 const members = inject('members')
+const accounts = inject('accounts')
+const appSettings = inject('appSettings')
 const receivables = inject('receivables')
 const recLoading = inject('recLoading')
 const duesSettings = inject('duesSettings')
@@ -337,9 +366,6 @@ const updateReceivable = inject('updateReceivable')
 const deleteReceivable = inject('deleteReceivable')
 const collectReceivable = inject('collectReceivable')
 
-const ACCOUNTS = ['淑華代收付', '一銀帳戶', '社長代收付']
-const ACCOUNT_PRESETS = ['社費收入', '代收款', '紅箱收入', '其他收入', '利息收入']
-
 const selectedYear = ref(new Date().getFullYear().toString())
 const filterMember = ref(null)
 const filterStatus = ref('all')
@@ -349,11 +375,7 @@ const saving = ref(false)
 function toMinguoYear(adYear) { return parseInt(adYear) - 1911 }
 function todayStr() { return new Date().toISOString().split('T')[0] }
 
-// 切換年度時重新載入 receivables
-watch(selectedYear, (year) => {
-  fetchReceivables({ year })
-})
-
+// 年度為前端過濾（receivables 為全量載入，分錄引擎共用）
 const availableYears = computed(() => {
   const years = [...new Set((receivables.value || []).map(r => r.dueYear))]
   if (!years.includes(selectedYear.value)) years.push(selectedYear.value)
@@ -363,6 +385,19 @@ const availableYears = computed(() => {
 const memberNames = computed(() => (members.value || []).map(m => m.name))
 const memberOptions = computed(() => memberNames.value)
 const categoryOptions = computed(() => (duesSettings.value || []).map(s => s.category))
+const fundOptions = computed(() => buildFundAccountOptions(members?.value))
+const monthlyDues = computed(() => parseFloat(appSettings?.value?.['dues.monthlyAmount']) || 6000)
+
+// 開單入帳科目：收入葉節點 + 代收/暫收
+const receivableAcctOptions = computed(() => {
+  const list = (accounts?.value || []).filter(a => a.active)
+  const hasChildren = new Set(list.filter(a => a.parentCode).map(a => a.parentCode))
+  const leaves = list.filter(a => !hasChildren.has(a.code))
+  return [
+    ...leaves.filter(a => a.type === 'income'),
+    ...leaves.filter(a => a.type === 'liability' && [CODES.AGENCY, CODES.TEMP_RECEIPT].includes(a.code)),
+  ].map(a => ({ title: `${a.code} ${a.name}`, value: a.code }))
+})
 
 // ── 金額輔助 ──
 function paidOf(item) {
@@ -431,15 +466,39 @@ function toggleMonth(key) {
 
 // ── 批次產生 ──
 const batchModal = ref(false)
-const batchForm = ref({ category: '', amount: '', dueDate: '', incomeAccount: '', members: [] })
+const batchForm = ref(makeBatchForm())
 
-const batchPeriodHint = computed(() => {
-  const m = (batchForm.value.category || '').match(/(\d{1,2})-(\d{1,2})月/)
-  return m ? `${m[1]}~${m[2]} 月` : ''
+function makeBatchForm() {
+  return { category: '', amount: '', dueDate: '', accountCode: null, periodStart: null, periodEnd: null, members: [] }
+}
+
+// 季度社費快速開單
+const quickFy = ref(fyOf(todayStr()))
+const quickQuarter = ref(null)
+const quickFyOptions = computed(() => {
+  const fy = fyOf(todayStr())
+  return [fy - 1, fy, fy + 1].map(f => ({ title: fyLabel(f), value: f }))
 })
+const quarterOptions = DUES_QUARTERS.map(q => ({ title: `${q.label}社費`, value: q.q }))
+
+function applyQuickDues() {
+  const info = duesQuarterPeriod(quickFy.value, quickQuarter.value)
+  if (!info) return
+  batchForm.value.category = info.categoryName
+  batchForm.value.amount = monthlyDues.value * 3
+  batchForm.value.dueDate = info.dueDate
+  batchForm.value.accountCode = CODES.DUES_INCOME
+  batchForm.value.periodStart = info.periodStart
+  batchForm.value.periodEnd = info.periodEnd
+}
+
+const batchPeriodLabel = computed(() =>
+  batchForm.value.periodStart ? `${batchForm.value.periodStart} ~ ${batchForm.value.periodEnd}` : ''
+)
 
 function openBatchModal() {
-  batchForm.value = { category: '', amount: '', dueDate: '', incomeAccount: '', members: [...memberNames.value] }
+  quickQuarter.value = null
+  batchForm.value = { ...makeBatchForm(), members: [...memberNames.value] }
   batchModal.value = true
 }
 function selectAllMembers() {
@@ -450,7 +509,10 @@ function onBatchCategoryChange(cat) {
   if (s) {
     batchForm.value.amount = s.standardAmount || ''
     batchForm.value.dueDate = s.dueDate || ''
-    batchForm.value.incomeAccount = s.incomeAccount || ''
+    batchForm.value.accountCode = s.accountCode || LEGACY_INCOME_ACCOUNT_MAP[s.incomeAccount] || null
+    // 期間由後端依 periodMonths 推得；此處僅顯示提示
+    batchForm.value.periodStart = null
+    batchForm.value.periodEnd = null
   }
 }
 
@@ -468,11 +530,13 @@ async function handleBatchGenerate() {
       memberNames: batchForm.value.members,
       amount: parseFloat(batchForm.value.amount) || 0,
       dueDate: batchForm.value.dueDate || '',
-      incomeAccount: batchForm.value.incomeAccount || null,
+      accountCode: batchForm.value.accountCode || null,
+      periodStart: batchForm.value.periodStart || null,
+      periodEnd: batchForm.value.periodEnd || null,
     })
     const year = (batchForm.value.dueDate || '').substring(0, 4) || selectedYear.value
     selectedYear.value = year
-    await fetchReceivables({ year })
+    await fetchReceivables()
     batchModal.value = false
     Swal.fire({
       icon: 'success', title: '批次產生完成',
@@ -489,11 +553,11 @@ async function handleBatchGenerate() {
 // ── 單筆新增 / 編輯 ──
 const editModal = ref(false)
 const editingItem = ref(null)
-const editForm = ref({ category: '', memberName: '', amount: '', dueDate: '', incomeAccount: '' })
+const editForm = ref({ category: '', memberName: '', amount: '', dueDate: '', accountCode: null })
 
 function openCreateModal() {
   editingItem.value = null
-  editForm.value = { category: '', memberName: '', amount: '', dueDate: '', incomeAccount: '' }
+  editForm.value = { category: '', memberName: '', amount: '', dueDate: '', accountCode: null }
   editModal.value = true
 }
 function openEditModal(item) {
@@ -503,7 +567,7 @@ function openEditModal(item) {
     memberName: item.memberName,
     amount: (item.amount ?? '').toString(),
     dueDate: item.dueDate || '',
-    incomeAccount: item.incomeAccount || '',
+    accountCode: item.accountCode || LEGACY_INCOME_ACCOUNT_MAP[item.incomeAccount] || null,
   }
   editModal.value = true
 }
@@ -512,7 +576,7 @@ function onEditCategoryChange(cat) {
   if (s) {
     if (!editForm.value.amount) editForm.value.amount = s.standardAmount || ''
     if (!editForm.value.dueDate) editForm.value.dueDate = s.dueDate || ''
-    if (!editForm.value.incomeAccount) editForm.value.incomeAccount = s.incomeAccount || ''
+    if (!editForm.value.accountCode) editForm.value.accountCode = s.accountCode || LEGACY_INCOME_ACCOUNT_MAP[s.incomeAccount] || null
   }
 }
 
@@ -528,7 +592,7 @@ async function handleSaveEdit() {
         memberName: editForm.value.memberName,
         amount: parseFloat(editForm.value.amount) || 0,
         dueDate: editForm.value.dueDate || '',
-        incomeAccount: editForm.value.incomeAccount || null,
+        accountCode: editForm.value.accountCode || null,
       })
     } else {
       await createReceivable({
@@ -536,12 +600,12 @@ async function handleSaveEdit() {
         memberName: editForm.value.memberName,
         amount: parseFloat(editForm.value.amount) || 0,
         dueDate: editForm.value.dueDate || '',
-        incomeAccount: editForm.value.incomeAccount || null,
+        accountCode: editForm.value.accountCode || null,
       })
     }
     const year = (editForm.value.dueDate || '').substring(0, 4) || selectedYear.value
     if (year !== selectedYear.value) selectedYear.value = year
-    else await fetchReceivables({ year })
+    await fetchReceivables()
     editModal.value = false
   } catch (e) {
     Swal.fire({ icon: 'error', title: '儲存失敗', text: e.message, confirmButtonColor: '#ef4444' })
@@ -553,7 +617,7 @@ async function handleSaveEdit() {
 // ── 收款 ──
 const collectModal = ref(false)
 const collectingItem = ref(null)
-const collectForm = ref({ date: todayStr(), amount: '', account: ACCOUNTS[0], remark: '' })
+const collectForm = ref({ date: todayStr(), amount: '', account: '一銀帳戶', remark: '' })
 
 const collectOverRemaining = computed(() => {
   if (!collectingItem.value) return false
@@ -566,7 +630,7 @@ function openCollectModal(item) {
   collectForm.value = {
     date: todayStr(),
     amount: remainingOf(item).toString(),
-    account: ACCOUNTS[0],
+    account: '一銀帳戶',
     remark: '',
   }
   collectModal.value = true
@@ -584,7 +648,7 @@ async function handleCollect() {
       account: collectForm.value.account,
       remark: collectForm.value.remark,
     })
-    await Promise.all([fetchRecords(), fetchReceivables({ year: selectedYear.value })])
+    await Promise.all([fetchRecords(), fetchReceivables()])
     collectModal.value = false
     Swal.fire({
       icon: 'success', title: '收款完成',
@@ -613,14 +677,14 @@ async function handleWaive(item) {
 async function handleReopen(item) {
   const result = await Swal.fire({
     title: '恢復為未收',
-    html: `確定要將 <b>${item.memberName}</b> 的「${item.sourceRef}」恢復為未收嗎？<br><span class="text-caption">注意：已產生的收入紀錄不會自動刪除，請自行至收支紀錄調整。</span>`,
+    html: `確定要將 <b>${item.memberName}</b> 的「${item.sourceRef}」恢復為未收嗎？<br><span class="text-caption">此帳款已產生的收款單將一併刪除，帳務自動回復。</span>`,
     icon: 'question',
     showCancelButton: true, confirmButtonColor: '#4f46e5', cancelButtonColor: '#6b7280',
     confirmButtonText: '確定恢復', cancelButtonText: '取消',
   })
   if (result.isConfirmed) {
     await reopenReceivable(item.id)
-    await fetchReceivables({ year: selectedYear.value })
+    await Promise.all([fetchRecords(), fetchReceivables()])
   }
 }
 

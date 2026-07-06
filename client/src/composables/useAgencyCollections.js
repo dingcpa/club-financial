@@ -31,13 +31,14 @@ export function useAgencyCollections() {
     }
   }
 
-  async function recordPayment(collectionId, memberName, amount, date) {
+  async function recordPayment(collectionId, memberName, amount, date, account) {
     const res = await apiFetch(`${API_URL}/${collectionId}/pay`, {
       method: 'POST',
       body: JSON.stringify({
         memberName,
         date: date || new Date().toISOString().split('T')[0],
-        amount
+        amount,
+        account: account || undefined
       })
     })
     if (res.ok) {
@@ -58,10 +59,10 @@ export function useAgencyCollections() {
     }
   }
 
-  async function closeCollection(collectionId, closedAmount, closedRemark) {
+  async function closeCollection(collectionId, closedAmount, closedRemark, payAccount) {
     const res = await apiFetch(`${API_URL}/${collectionId}/close`, {
       method: 'POST',
-      body: JSON.stringify({ closedAmount, closedRemark: closedRemark || '' })
+      body: JSON.stringify({ closedAmount, closedRemark: closedRemark || '', payAccount: payAccount || null })
     })
     if (res.ok) {
       const updated = await res.json()
