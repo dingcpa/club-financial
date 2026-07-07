@@ -16,7 +16,14 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(bodyParser.json());
+// 保留原始 body 供 LINE webhook 簽章驗證
+app.use(bodyParser.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
+
+// LINE 財務精靈（設定 ROTARY_* 環境變數才掛載；LINE 簽章即其驗證，不走 JWT）
+const lineBot = require('./line-bot');
+if (lineBot.mount(app)) {
+    console.log('LINE 財務精靈 mounted at /line/webhook');
+}
 
 // Serve Vue frontend static files
 const clientDist = path.join(__dirname, '../client/dist');

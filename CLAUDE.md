@@ -59,6 +59,8 @@ club-financial/
 ├── server/
 │   ├── index.js             # Express 5 API 入口
 │   ├── db.js                # mysql2 連線池 + initDB()（自動建表＋科目/專案 seed）
+│   ├── line-bot.js          # LINE 財務精靈（/line/webhook，紅箱登記→直接寫收入單；
+│   │                        #   設 ROTARY_LINE_CHANNEL_SECRET/TOKEN 才掛載，LINE 簽章驗證不走 JWT）
 │   ├── migrate-accounts.js  # 歷史資料 → 新科目體系遷移腳本（冪等、DRY_RUN 預設）
 │   └── seed-user.js
 ├── client/                  # Vue 3 + Vuetify 3 + Vite
@@ -145,5 +147,8 @@ club-financial/
 ## 部署（Zeabur）
 
 - **Build Command**：`npm run build`；**Start Command**：`npm start`
-- **環境變數**：DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME / JWT_SECRET
+- **環境變數**：DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME / JWT_SECRET；
+  LINE 財務精靈另需 ROTARY_LINE_CHANNEL_SECRET / ROTARY_LINE_CHANNEL_ACCESS_TOKEN
+  （選配 ROTARY_ALLOWED_GROUP_IDS / ROTARY_ALLOWED_USER_IDS / ROTARY_HANDLER_NAME）
+- LINE webhook 固定網址：`https://<域名>/line/webhook`（LINE Developers Console 設一次即可）
 - 部署後 `initDB()` 自動補表/欄位/seed（冪等）。

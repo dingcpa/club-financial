@@ -153,6 +153,15 @@ async function initDB() {
       v TEXT
     ) CHARACTER SET utf8mb4
   `)
+  // LINE 財務精靈：紅箱登記場次（結算後轉為 finance 單據）
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS redbox_sessions (
+      sourceId VARCHAR(64) PRIMARY KEY,
+      date VARCHAR(10) NOT NULL,
+      \`rows\` LONGTEXT NOT NULL,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) CHARACTER SET utf8mb4
+  `)
   // 為已存在的 users 表補上 role 欄位（MariaDB 支援 IF NOT EXISTS）
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`)
   // 為已存在的 dues_settings 補上「類型」與「對方科目」欄位
