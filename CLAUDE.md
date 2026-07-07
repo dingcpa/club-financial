@@ -149,6 +149,8 @@ club-financial/
 - **Build Command**：`npm run build`；**Start Command**：`npm start`
 - **環境變數**：DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME / JWT_SECRET；
   LINE 財務精靈另需 ROTARY_LINE_CHANNEL_SECRET / ROTARY_LINE_CHANNEL_ACCESS_TOKEN
-  （選配 ROTARY_ALLOWED_GROUP_IDS / ROTARY_ALLOWED_USER_IDS / ROTARY_HANDLER_NAME）
-- LINE webhook 固定網址：`https://<域名>/line/webhook`（LINE Developers Console 設一次即可）
+  （選配 ROTARY_ALLOWED_GROUP_IDS / ROTARY_ALLOWED_USER_IDS / ROTARY_HANDLER_NAME）；
+  LIFF 紅箱表單另需 ROTARY_LIFF_ID / ROTARY_LOGIN_CHANNEL_ID（LINE Login channel）
+- LINE webhook 固定網址：`https://<域名>/line/webhook`（LINE Developers Console 設一次即可）；
+  LIFF 表單頁：`https://<域名>/liff/redbox`（LINE ID Token 驗證，不走系統 JWT）
 - 部署後 `initDB()` 自動補表/欄位/seed（冪等）。

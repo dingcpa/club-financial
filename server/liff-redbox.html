@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>紅箱登記</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: #f1f5f9; color: #1e293b; padding-bottom: 90px; }
+  header { background: #b91c1c; color: #fff; padding: 14px 16px; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .container { padding: 12px; max-width: 560px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  label { font-size: 12px; color: #64748b; display: block; margin-bottom: 4px; }
+  input, select { width: 100%; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; background:#fff; }
+  .row2 { display: flex; gap: 8px; }
+  .row2 > div { flex: 1; }
+  .member { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; }
+  .member:last-child { border-bottom: none; }
+  .member .name { flex: 1.4; font-size: 15px; }
+  .member .nick { color: #94a3b8; font-size: 12px; margin-left: 4px; }
+  .member input { flex: 1; text-align: right; padding: 7px 8px; }
+  .member input.filled { border-color: #b91c1c; background: #fef2f2; font-weight: 600; }
+  .section-title { font-size: 13px; font-weight: 700; color: #475569; margin: 14px 4px 6px; }
+  #search { margin-bottom: 8px; }
+  .footer { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #e2e8f0; padding: 10px 12px; display: flex; align-items: center; gap: 10px; z-index: 20; }
+  .total { flex: 1; font-size: 14px; }
+  .total b { font-size: 18px; color: #b91c1c; }
+  button { border: none; border-radius: 10px; padding: 11px 14px; font-size: 15px; font-weight: 700; }
+  .btn-save { background: #e2e8f0; color: #334155; }
+  .btn-settle { background: #b91c1c; color: #fff; }
+  button:disabled { opacity: .5; }
+  #addExtra { background: none; color: #b91c1c; font-size: 13px; padding: 6px; font-weight: 600; }
+  .extra-row { display: flex; gap: 8px; padding: 5px 0; }
+  .extra-row input:first-child { flex: 1.4; }
+  .extra-row input:last-child { flex: 1; text-align: right; }
+  #status { text-align: center; padding: 40px 16px; font-size: 15px; color: #64748b; }
+  .done { text-align: center; padding: 48px 16px; }
+  .done .big { font-size: 44px; margin-bottom: 12px; }
+  .done h2 { font-size: 18px; margin-bottom: 8px; }
+  .done p { color: #64748b; font-size: 14px; line-height: 1.7; }
+  .toast { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 9px 18px; border-radius: 20px; font-size: 14px; z-index: 50; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  .toast.show { opacity: .95; }
+</style>
+</head>
+<body>
+<header><h1>🧧 紅箱登記</h1></header>
+<div id="status">載入中…</div>
+
+<div class="container" id="form" style="display:none">
+  <div class="card">
+    <div class="row2">
+      <div>
+        <label>例會日期</label>
+        <input type="date" id="date">
+      </div>
+      <div>
+        <label>紅箱項目</label>
+        <select id="item">
+          <option>例會歡喜紅箱</option>
+          <option>授證紅箱</option>
+          <option>交接紅箱</option>
+          <option>春節紅箱</option>
+          <option>母親節紅箱</option>
+          <option>父親節紅箱</option>
+          <option>中秋節紅箱</option>
+          <option>其他紅箱</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <input id="search" placeholder="🔍 搜尋姓名 / 社名…">
+    <div id="members"></div>
+  </div>
+
+  <div class="section-title">其他捐款人（來賓、幹事…）</div>
+  <div class="card">
+    <div id="extras"></div>
+    <button id="addExtra" type="button">＋ 加一位</button>
+  </div>
+</div>
+
+<div class="container done" id="done" style="display:none">
+  <div class="big">✅</div>
+  <h2 id="doneTitle"></h2>
+  <p id="doneText"></p>
+  <p style="margin-top:20px"><button class="btn-settle" onclick="liff.closeWindow()">關閉</button></p>
+</div>
+
+<div class="footer" id="footer" style="display:none">
+  <div class="total">合計 <b id="total">0</b> <span id="count" style="color:#94a3b8;font-size:12px"></span></div>
+  <button class="btn-save" id="btnSave" type="button">儲存名單</button>
+  <button class="btn-settle" id="btnSettle" type="button">結算入帳</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const LIFF_ID = '__LIFF_ID__';
+let idToken = '';
+let src = '';
+let members = [];
+
+const $ = (id) => document.getElementById(id);
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function fmt(n) { return Number(n).toLocaleString('en-US'); }
+
+function collectRows() {
+  const rows = [];
+  document.querySelectorAll('#members input[data-name]').forEach(inp => {
+    const v = parseInt((inp.value || '').replace(/,/g, ''), 10);
+    if (v > 0) rows.push({ name: inp.dataset.name, amount: v });
+  });
+  document.querySelectorAll('#extras .extra-row').forEach(row => {
+    const [nameI, amtI] = row.querySelectorAll('input');
+    const v = parseInt((amtI.value || '').replace(/,/g, ''), 10);
+    if (nameI.value.trim() && v > 0) rows.push({ name: nameI.value.trim(), amount: v });
+  });
+  return rows;
+}
+
+function refreshTotal() {
+  const rows = collectRows();
+  $('total').textContent = fmt(rows.reduce((s, r) => s + r.amount, 0));
+  $('count').textContent = rows.length ? `（${rows.length} 筆）` : '';
+  document.querySelectorAll('#members input[data-name]').forEach(inp => {
+    inp.classList.toggle('filled', parseInt(inp.value, 10) > 0);
+  });
+}
+
+function addExtraRow(name = '', amount = '') {
+  const div = document.createElement('div');
+  div.className = 'extra-row';
+  div.innerHTML = '<input placeholder="姓名"><input type="number" inputmode="numeric" placeholder="金額">';
+  const [nameI, amtI] = div.querySelectorAll('input');
+  nameI.value = name;
+  amtI.value = amount;
+  amtI.addEventListener('input', refreshTotal);
+  $('extras').appendChild(div);
+}
+
+function renderMembers(prefill) {
+  const box = $('members');
+  box.innerHTML = '';
+  for (const m of members) {
+    const div = document.createElement('div');
+    div.className = 'member';
+    div.dataset.search = (m.name + ' ' + (m.nickname || '')).toLowerCase();
+    const label = document.createElement('div');
+    label.className = 'name';
+    label.innerHTML = m.name + (m.nickname ? `<span class="nick">${m.nickname}</span>` : '');
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.inputMode = 'numeric';
+    inp.placeholder = '金額';
+    inp.dataset.name = m.name;
+    if (prefill[m.name]) inp.value = prefill[m.name];
+    inp.addEventListener('input', refreshTotal);
+    div.appendChild(label);
+    div.appendChild(inp);
+    box.appendChild(div);
+  }
+}
+
+async function api(path, payload) {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken, src, ...payload }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+
+async function save(settle) {
+  const rows = collectRows();
+  if (!rows.length) { toast('尚未填任何金額'); return; }
+  if (settle && !confirm(`確定結算入帳？\n${rows.length} 筆、合計 NT$ ${fmt(rows.reduce((s, r) => s + r.amount, 0))}\n項目：${$('item').value}`)) return;
+  $('btnSave').disabled = $('btnSettle').disabled = true;
+  try {
+    const res = await api('/line/liff/save', {
+      date: $('date').value,
+      item: $('item').value,
+      rows,
+      settle: !!settle,
+    });
+    if (settle) {
+      $('form').style.display = 'none';
+      $('footer').style.display = 'none';
+      $('doneTitle').textContent = `已結算「${$('item').value}」`;
+      $('doneText').innerHTML = `${res.count} 筆、合計 NT$ ${fmt(res.total)}<br>傳票已自動產生，現金入帳於「經手人:${res.handler}」。<br>可至財務系統帳簿查詢檢視。`;
+      $('done').style.display = 'block';
+    } else {
+      toast(`已儲存 ${res.count} 筆（可再修改，或由群組 /紅箱結算）`);
+    }
+  } catch (e) {
+    toast('❌ ' + e.message);
+  } finally {
+    $('btnSave').disabled = $('btnSettle').disabled = false;
+  }
+}
+
+async function main() {
+  await liff.init({ liffId: LIFF_ID });
+  if (!liff.isLoggedIn()) { liff.login(); return; }
+  idToken = liff.getIDToken();
+  src = new URLSearchParams(location.search).get('src') || '';
+
+  const ctx = await api('/line/liff/context', {});
+  members = ctx.members;
+  src = ctx.src; // 後端確認後的 sourceId（無 src 參數時＝個人）
+  $('date').value = ctx.date;
+
+  // 既有場次預填
+  const prefill = {}, extras = [];
+  for (const r of ctx.rows || []) {
+    if (members.some(m => m.name === r.name)) prefill[r.name] = (prefill[r.name] || 0) + r.amount;
+    else extras.push(r);
+  }
+  renderMembers(prefill);
+  extras.forEach(r => addExtraRow(r.name, r.amount));
+  for (let i = extras.length; i < 2; i++) addExtraRow();
+  refreshTotal();
+
+  $('search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#members .member').forEach(div => {
+      div.style.display = !q || div.dataset.search.includes(q) ? '' : 'none';
+    });
+  });
+  $('addExtra').addEventListener('click', () => addExtraRow());
+  $('btnSave').addEventListener('click', () => save(false));
+  $('btnSettle').addEventListener('click', () => save(true));
+
+  $('status').style.display = 'none';
+  $('form').style.display = 'block';
+  $('footer').style.display = 'flex';
+}
+
+main().catch(e => { $('status').textContent = '❌ ' + (e.message || e); });
+</script>
+</body>
+</html>

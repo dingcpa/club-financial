@@ -15,6 +15,8 @@
 //   ROTARY_ALLOWED_USER_IDS（允許私訊操作者，可空）
 //   ROTARY_HANDLER_NAME（紅箱現金經手人，預設 陳淑華）
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { pool } = require('./db');
 
 const SECRET = process.env.ROTARY_LINE_CHANNEL_SECRET || '';
@@ -22,6 +24,9 @@ const TOKEN = process.env.ROTARY_LINE_CHANNEL_ACCESS_TOKEN || '';
 const HANDLER_NAME = process.env.ROTARY_HANDLER_NAME || '陳淑華';
 const ALLOWED_GROUPS = new Set((process.env.ROTARY_ALLOWED_GROUP_IDS || '').split(',').map(s => s.trim()).filter(Boolean));
 const ALLOWED_USERS = new Set((process.env.ROTARY_ALLOWED_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean));
+// LIFF 紅箱登記表單（選配）：LINE Login channel 下建 LIFF app
+const LIFF_ID = process.env.ROTARY_LIFF_ID || '';
+const LOGIN_CHANNEL_ID = process.env.ROTARY_LOGIN_CHANNEL_ID || '';
 
 const HELP_TEXT = [
   '財務精靈指令：',
@@ -136,27 +141,31 @@ async function cmdClear(sourceId) {
   return `已清空本場次（${sess ? sess.rows.length : 0} 筆，未寫入）。`;
 }
 
-async function cmdSettle(sourceId, itemArg) {
-  const item = itemArg.trim() || '例會歡喜紅箱';
-  const sess = await loadSession(sourceId);
-  if (!sess || !sess.rows.length) return '本場次尚無登記，無可結算。';
-  // 直接寫入 finance 收入單（引擎即時推導傳票）
-  for (let i = 0; i < sess.rows.length; i++) {
-    const r = sess.rows[i];
+// 寫入 finance 收入單（引擎即時推導傳票）；rows: [{name, amount, by?}]
+async function writeFinanceRows(rows, date, item, byLabel) {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
     await pool.query('INSERT INTO finance SET ?', [{
       id: Date.now() + i,
       type: 'income',
-      date: sess.date,
+      date,
       item,
       amount: r.amount,
       member: r.name,
       account: `經手人:${HANDLER_NAME}`,
       fromAccount: '', toAccount: '',
       startPeriod: null, endPeriod: null,
-      remark: `LINE 財務精靈紅箱登記（${r.by}）`,
+      remark: `LINE 財務精靈紅箱登記（${r.by || byLabel || ''}）`,
       accountCode: '4102',
     }]);
   }
+}
+
+async function cmdSettle(sourceId, itemArg) {
+  const item = itemArg.trim() || '例會歡喜紅箱';
+  const sess = await loadSession(sourceId);
+  if (!sess || !sess.rows.length) return '本場次尚無登記，無可結算。';
+  await writeFinanceRows(sess.rows, sess.date, item);
   const total = sess.rows.reduce((s, r) => s + r.amount, 0);
   const count = sess.rows.length;
   await dropSession(sourceId);
@@ -176,7 +185,16 @@ async function handleText(sourceId, by, text) {
   if (t.startsWith('/紅箱刪除')) return cmdRemove(sourceId, t.slice('/紅箱刪除'.length));
   if (t === '/紅箱清空') return cmdClear(sourceId);
   if (t.startsWith('/紅箱結算')) return cmdSettle(sourceId, t.slice('/紅箱結算'.length));
-  if (t === '/紅箱') return HELP_TEXT;
+  if (t === '/紅箱') {
+    if (LIFF_ID) {
+      return [
+        '🧧 紅箱登記表單（列出全體社友，填金額即可）：',
+        `https://liff.line.me/${LIFF_ID}?src=${encodeURIComponent(sourceId)}`,
+        '（也可直接輸入：/紅箱 姓名 金額）',
+      ].join('\n');
+    }
+    return HELP_TEXT;
+  }
   if (t.startsWith('/紅箱')) return cmdAdd(sourceId, by, t.slice('/紅箱'.length));
   return null;
 }
@@ -253,6 +271,96 @@ async function handleEvent(event) {
   if (out && replyToken) await lineReply(replyToken, out);
 }
 
+// ── LIFF 紅箱登記表單 ───────────────────────────────────────
+// 以 LINE ID Token 驗證身份（LIFF app 需開 openid scope），不走系統 JWT
+async function verifyIdToken(idToken) {
+  if (!idToken || !LOGIN_CHANNEL_ID) return null;
+  const r = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ id_token: idToken, client_id: LOGIN_CHANNEL_ID }),
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  return { userId: j.sub, name: j.name || '' };
+}
+
+function liffUserAllowed(userId) {
+  return !ALLOWED_USERS.size || ALLOWED_USERS.has(userId);
+}
+
+// LIFF 表單寫入的場次歸屬：指令來源的聊天室（群組須在白名單），或本人私訊場次
+function resolveSrc(src, userId) {
+  if (!src || src === userId) return userId;
+  if (src.startsWith('C') || src.startsWith('R')) {
+    if (ALLOWED_GROUPS.size && !ALLOWED_GROUPS.has(src)) return null;
+    return src;
+  }
+  return null; // 不接受寫入他人的個人場次
+}
+
+function mountLiff(app) {
+  app.get('/liff/redbox', (req, res) => {
+    const html = fs.readFileSync(path.join(__dirname, 'liff-redbox.html'), 'utf8');
+    res.type('html').send(html.replace('__LIFF_ID__', LIFF_ID));
+  });
+
+  app.post('/line/liff/context', async (req, res) => {
+    try {
+      const auth = await verifyIdToken(req.body.idToken);
+      if (!auth) return res.status(401).json({ error: 'LINE 身份驗證失敗，請重新開啟頁面' });
+      if (!liffUserAllowed(auth.userId)) return res.status(403).json({ error: `未授權使用者（userId: ${auth.userId}）` });
+      const src = resolveSrc(req.body.src, auth.userId);
+      if (!src) return res.status(403).json({ error: '此聊天室未授權' });
+      const [members] = await pool.query('SELECT name, nickname FROM members ORDER BY name');
+      const sess = await loadSession(src);
+      res.json({
+        src,
+        date: (sess && sess.rows.length) ? sess.date : today(),
+        rows: sess ? sess.rows : [],
+        members,
+        handler: HANDLER_NAME,
+      });
+    } catch (e) {
+      console.error('liff/context error:', e);
+      res.status(500).json({ error: '載入失敗' });
+    }
+  });
+
+  app.post('/line/liff/save', async (req, res) => {
+    try {
+      const auth = await verifyIdToken(req.body.idToken);
+      if (!auth) return res.status(401).json({ error: 'LINE 身份驗證失敗，請重新開啟頁面' });
+      if (!liffUserAllowed(auth.userId)) return res.status(403).json({ error: `未授權使用者（userId: ${auth.userId}）` });
+      const src = resolveSrc(req.body.src, auth.userId);
+      if (!src) return res.status(403).json({ error: '此聊天室未授權' });
+
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(req.body.date || '') ? req.body.date : today();
+      const item = String(req.body.item || '例會歡喜紅箱').trim().slice(0, 100) || '例會歡喜紅箱';
+      const rows = [];
+      for (const r of req.body.rows || []) {
+        const amount = parseInt(r.amount, 10);
+        const name = String(r.name || '').trim().slice(0, 100);
+        if (!name || !(amount > 0)) continue;
+        rows.push({ name, amount, by: auth.name || auth.userId.slice(-6), ts: new Date().toISOString() });
+      }
+      if (!rows.length) return res.status(400).json({ error: '沒有有效的登記資料' });
+
+      const total = rows.reduce((s, r) => s + r.amount, 0);
+      if (req.body.settle) {
+        await writeFinanceRows(rows, date, item);
+        await dropSession(src);
+        return res.json({ ok: true, settled: true, count: rows.length, total, handler: HANDLER_NAME });
+      }
+      await saveSession(src, { date, rows });
+      res.json({ ok: true, settled: false, count: rows.length, total, handler: HANDLER_NAME });
+    } catch (e) {
+      console.error('liff/save error:', e);
+      res.status(500).json({ error: '儲存失敗' });
+    }
+  });
+}
+
 function mount(app) {
   if (!SECRET || !TOKEN) return false;
   app.post('/line/webhook', (req, res) => {
@@ -265,6 +373,10 @@ function mount(app) {
       handleEvent(event).catch(e => console.error('handleEvent error:', e));
     }
   });
+  if (LIFF_ID && LOGIN_CHANNEL_ID) {
+    mountLiff(app);
+    console.log('LINE 財務精靈 LIFF mounted at /liff/redbox');
+  }
   return true;
 }
 
