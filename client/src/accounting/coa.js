@@ -51,9 +51,20 @@ export function fundAccountLabel(str) {
   return s || '（未指定）'
 }
 
-// 收入/支出/轉帳單的「資金帳戶」下拉選項：銀行 + 經手人（幹事、全體社友）
-export function buildFundAccountOptions(members, extraHandlers = ['陳淑華']) {
-  const options = [{ title: BANK_NAME, value: BANK_NAME }]
+// 收入/支出/轉帳單的「資金帳戶」下拉選項：銀行科目（isCash）+ 經手人（幹事、全體社友）
+// 銀行的資金字串＝科目名稱（1101 沿用舊字彙 '一銀帳戶'）
+export function buildFundAccountOptions(members, accounts, extraHandlers = ['陳淑華']) {
+  const options = []
+  const banks = (accounts || []).filter(a => a.isCash && a.active)
+  if (banks.length) {
+    for (const b of banks) {
+      options.push(b.code === CODES.BANK
+        ? { title: `${BANK_NAME}（${b.name}）`, value: BANK_NAME }
+        : { title: b.name, value: b.name })
+    }
+  } else {
+    options.push({ title: BANK_NAME, value: BANK_NAME })
+  }
   const seen = new Set()
   for (const name of extraHandlers) {
     if (!name || seen.has(name)) continue

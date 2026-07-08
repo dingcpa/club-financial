@@ -70,11 +70,13 @@ export function deriveAllEntries({
 
   function fundOf(str, ctx) {
     const f = resolveFundAccount(str)
-    if (!f) {
-      diagnostics.push({ level: 'warn', message: `無法辨識資金帳戶「${str}」（${ctx}），以經手人:陳淑華處理` })
-      return { code: CODES.HANDLER, person: '陳淑華' }
-    }
-    return f
+    if (f) return f
+    // 動態銀行科目：資金字串＝isCash 科目名稱（如 '銀行存款-定存'）
+    const s = (str || '').trim()
+    const byName = (accounts || []).find(a => a.isCash && a.name === s)
+    if (byName) return { code: byName.code, person: '' }
+    diagnostics.push({ level: 'warn', message: `無法辨識資金帳戶「${str}」（${ctx}），以經手人:陳淑華處理` })
+    return { code: CODES.HANDLER, person: '陳淑華' }
   }
 
   // ── 1. 期初餘額（基準日一張傳票，差額軋入累積餘絀）─────────

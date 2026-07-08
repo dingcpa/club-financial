@@ -320,6 +320,7 @@ import { buildFundAccountOptions, handlerFundValue } from '../accounting/coa.js'
 const { xs } = useDisplay()
 
 const members = inject('members')
+const accounts = inject('accounts')
 const collections = inject('agencyCollections')
 const loading = inject('loading')
 const injCreateCollection = inject('createCollection')
@@ -330,7 +331,7 @@ const injDeleteCollection = inject('deleteCollection')
 const fetchRecords = inject('fetchRecords')
 const fetchReceivables = inject('fetchReceivables')
 
-const fundOptions = computed(() => buildFundAccountOptions(members?.value))
+const fundOptions = computed(() => buildFundAccountOptions(members?.value, accounts?.value))
 
 const showForm = ref(false)
 const expandedId = ref(null)

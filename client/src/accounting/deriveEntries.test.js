@@ -228,6 +228,23 @@ describe('現金流量表', () => {
   })
 })
 
+describe('多銀行資金帳戶', () => {
+  it('資金字串＝isCash 科目名稱可解析；銀行間轉帳不影響現金池', () => {
+    const accounts = [...ACCOUNTS, { code: '1102', name: '銀行存款-定存', type: 'asset', isCash: 1, active: 1 }]
+    const byCode = Object.fromEntries(accounts.map(a => [a.code, a]))
+    const docs = [
+      { id: 900, type: 'income', date: '2026-07-05', item: '定存利息', amount: 1000, account: '銀行存款-定存', accountCode: '4103' },
+      { id: 901, type: 'transfer', date: '2026-07-06', item: '轉定存', amount: 500, fromAccount: '一銀帳戶', toAccount: '銀行存款-定存' },
+    ]
+    const { entries, diagnostics } = deriveAllEntries({ accounts, settings: SETTINGS, finance: docs })
+    expect(diagnostics.filter(d => d.level === 'warn')).toEqual([])
+    expect(sumLines(entries, (e, l) => l.accountCode === '1102')).toBe(1500)
+    expect(sumLines(entries, (e, l) => l.accountCode === '1101')).toBe(-500)
+    const cf = cashFlow(entries, byCode, { from: '2026-07-01', to: '2026-07-31' })
+    expect(cf.net).toBe(1000) // 行間調撥不算現金流
+  })
+})
+
 describe('試算表與分類帳', () => {
   it('試算平衡；分類帳期初/流水/餘額正確', () => {
     const docs = [

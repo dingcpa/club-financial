@@ -385,7 +385,7 @@ const availableYears = computed(() => {
 const memberNames = computed(() => (members.value || []).map(m => m.name))
 const memberOptions = computed(() => memberNames.value)
 const categoryOptions = computed(() => (duesSettings.value || []).map(s => s.category))
-const fundOptions = computed(() => buildFundAccountOptions(members?.value))
+const fundOptions = computed(() => buildFundAccountOptions(members?.value, accounts?.value))
 const monthlyDues = computed(() => parseFloat(appSettings?.value?.['dues.monthlyAmount']) || 6000)
 
 // 開單入帳科目：收入葉節點 + 代收/暫收

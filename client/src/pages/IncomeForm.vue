@@ -135,7 +135,7 @@ const handleCancelEdit = inject('handleCancelEdit')
 const currentMonth = new Date().toISOString().substring(0, 7)
 
 const acctOptions = computed(() => incomeAccountOptions(accounts?.value))
-const fundOptions = computed(() => buildFundAccountOptions(members?.value))
+const fundOptions = computed(() => buildFundAccountOptions(members?.value, accounts?.value))
 const projectOptions = computed(() =>
   (projects?.value || []).filter(p => p.active).map(p => ({ title: p.name, value: p.id }))
 )

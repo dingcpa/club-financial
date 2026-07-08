@@ -69,13 +69,14 @@ import Swal from 'sweetalert2'
 import { buildFundAccountOptions, normalizeFundValue, fundAccountLabel, BANK_NAME, handlerFundValue } from '../accounting/coa.js'
 
 const members = inject('members')
+const accounts = inject('accounts')
 const editingRecord = inject('editingRecord')
 const addRecord = inject('addRecord')
 const updateRecord = inject('updateRecord')
 const deleteRecord = inject('deleteRecord')
 const handleCancelEdit = inject('handleCancelEdit')
 
-const fundOptions = computed(() => buildFundAccountOptions(members?.value))
+const fundOptions = computed(() => buildFundAccountOptions(members?.value, accounts?.value))
 
 function makeDefaultForm() {
   return {
