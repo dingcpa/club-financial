@@ -156,6 +156,7 @@ import { useAppSettings } from './composables/useAppSettings.js'
 import { useManualJournals } from './composables/useManualJournals.js'
 import { useOpeningBalances } from './composables/useOpeningBalances.js'
 import { useBankReconciliations } from './composables/useBankReconciliations.js'
+import { useBudgets } from './composables/useBudgets.js'
 
 import LoginPage from './pages/LoginPage.vue'
 import Summary from './pages/Summary.vue'
@@ -174,6 +175,7 @@ import CategorySettings from './pages/CategorySettings.vue'
 import LedgerBrowser from './pages/LedgerBrowser.vue'
 import ManualJournal from './pages/ManualJournal.vue'
 import OpeningBalance from './pages/OpeningBalance.vue'
+import BudgetReport from './pages/BudgetReport.vue'
 import { useAccounting } from './composables/useAccounting.js'
 
 // ----- Auth -----
@@ -198,6 +200,7 @@ const { appSettings, fetchAppSettings, saveAppSettings } = useAppSettings()
 const { manualJournals, fetchManualJournals, addManualJournal, updateManualJournal, deleteManualJournal } = useManualJournals()
 const { openingBalances, fetchOpeningBalances, saveOpeningBalances } = useOpeningBalances()
 const { bankReconciliations, fetchBankReconciliations, addBankReconciliation, deleteBankReconciliation } = useBankReconciliations()
+const { budgets, fetchBudgets, saveBudgets } = useBudgets()
 
 // 分錄推導引擎：所有帳簿與報表的資料源
 const accounting = useAccounting({ records, receivables, agencyCollections, manualJournals, openingBalances, accounts, appSettings })
@@ -206,6 +209,7 @@ const drillContext = ref(null)
 // ----- 導覽選單定義 -----
 const reportItems = [
   { tab: 'summary', icon: 'mdi-chart-bar', title: '收支月報表' },
+  { tab: 'budget', icon: 'mdi-chart-donut', title: '預算執行表' },
   { tab: 'balance-sheet', icon: 'mdi-scale-balance', title: '資產負債表' },
   { tab: 'cash-flow', icon: 'mdi-cash-fast', title: '現金流量表' },
   { tab: 'ledger', icon: 'mdi-notebook-outline', title: '帳簿查詢' },
@@ -234,6 +238,7 @@ const adminItems = [
 // ----- 頁面對應 -----
 const pageMap = {
   'summary': Summary,
+  'budget': BudgetReport,
   'balance-sheet': BalanceSheet,
   'cash-flow': CashFlow,
   'dues': MemberDues,
@@ -417,6 +422,8 @@ provide('fetchManualJournals', fetchManualJournals)
 provide('addManualJournal', addManualJournal)
 provide('updateManualJournal', updateManualJournal)
 provide('deleteManualJournal', deleteManualJournal)
+provide('budgets', budgets)
+provide('saveBudgets', saveBudgets)
 provide('bankReconciliations', bankReconciliations)
 provide('fetchBankReconciliations', fetchBankReconciliations)
 provide('addBankReconciliation', addBankReconciliation)
@@ -439,7 +446,7 @@ watch(isAuthenticated, (val) => {
     Promise.all([
       fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections(), fetchReceivables(),
       fetchAccounts(), fetchProjects(), fetchAppSettings(), fetchManualJournals(), fetchOpeningBalances(),
-      fetchBankReconciliations(),
+      fetchBankReconciliations(), fetchBudgets(),
     ])
   }
 }, { immediate: true })

@@ -1114,6 +1114,49 @@ app.put('/api/settings', adminOnly, async (req, res) => {
     }
 });
 
+// ─── Budgets（年度預算）─────────────────────────────────────
+app.get('/api/budgets', async (req, res) => {
+    try {
+        const { fy } = req.query;
+        let sql = 'SELECT * FROM budgets';
+        const params = [];
+        if (fy) { sql += ' WHERE fy=?'; params.push(parseInt(fy)); }
+        const [rows] = await pool.query(sql, params);
+        res.json(rows.map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read budgets' });
+    }
+});
+
+// 依年度整批覆寫（僅管理員）
+app.put('/api/budgets/:fy', adminOnly, async (req, res) => {
+    try {
+        const fy = parseInt(req.params.fy);
+        const rows = req.body;
+        if (!fy || !Array.isArray(rows)) return res.status(400).json({ error: '缺少年度或預算明細' });
+        const [accounts] = await pool.query('SELECT code FROM accounts');
+        const codes = new Set(accounts.map(a => a.code));
+        for (const r of rows) {
+            if (!codes.has(r.accountCode)) return res.status(400).json({ error: `科目 ${r.accountCode} 不存在` });
+        }
+        await pool.query('DELETE FROM budgets WHERE fy=?', [fy]);
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i];
+            const amt = parseFloat(r.amount) || 0;
+            if (!amt) continue;
+            await pool.query(
+                'INSERT INTO budgets (id, fy, accountCode, amount, remark) VALUES (?,?,?,?,?)',
+                [Date.now() + i, fy, r.accountCode, amt, r.remark || null]
+            );
+        }
+        const [saved] = await pool.query('SELECT * FROM budgets WHERE fy=?', [fy]);
+        res.json(saved.map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })));
+    } catch (e) {
+        console.error('Error saving budgets:', e);
+        res.status(500).json({ error: 'Failed to save budgets' });
+    }
+});
+
 // ─── Bank Reconciliations（銀行存款核對）────────────────────
 app.get('/api/bank-reconciliations', async (req, res) => {
     try {
