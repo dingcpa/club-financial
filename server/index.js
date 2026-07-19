@@ -1117,6 +1117,53 @@ app.put('/api/settings', adminOnly, async (req, res) => {
     }
 });
 
+// ─── Notifications（催繳通知）───────────────────────────────
+app.get('/api/notifications', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM notification_logs ORDER BY createdAt DESC LIMIT 100');
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read notifications' });
+    }
+});
+
+// 社費催繳：channel='line-group' 推播到財務群組並記錄；channel='text' 僅記錄草稿（供複製）
+app.post('/api/notifications/dues-reminder', async (req, res) => {
+    try {
+        const { channel, content, memberNames } = req.body;
+        if (!content) return res.status(400).json({ error: '缺少通知內容' });
+        const target = Array.isArray(memberNames) && memberNames.length ? memberNames.join('、').slice(0, 90) : '欠費社友';
+        const log = {
+            id: Date.now(),
+            kind: 'dues-reminder',
+            target,
+            channel: channel === 'line-group' ? 'line-group' : 'text',
+            content,
+            status: 'draft',
+            error: null,
+            createdBy: req.user.username,
+        };
+        if (channel === 'line-group') {
+            if (!lineBot.pushAvailable()) {
+                return res.status(400).json({ error: 'LINE 財務精靈未設定（缺 ROTARY_LINE_CHANNEL_ACCESS_TOKEN）' });
+            }
+            const groupId = lineBot.defaultGroupId();
+            if (!groupId) {
+                return res.status(400).json({ error: '未設定 ROTARY_ALLOWED_GROUP_IDS（推播目標群組）' });
+            }
+            const err = await lineBot.linePush(groupId, content);
+            log.status = err ? 'failed' : 'sent';
+            log.error = err;
+        }
+        await pool.query('INSERT INTO notification_logs SET ?', [log]);
+        if (log.status === 'failed') return res.status(502).json({ error: log.error, log });
+        res.status(201).json(log);
+    } catch (e) {
+        console.error('Error sending dues reminder:', e);
+        res.status(500).json({ error: 'Failed to send reminder' });
+    }
+});
+
 // ─── Attachments（佐證附件）─────────────────────────────────
 // data 為前端壓縮後的 dataURL；單筆上限 3MB、每單據最多 3 張
 async function saveAttachments(refType, refId, attachments, username) {

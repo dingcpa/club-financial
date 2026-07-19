@@ -209,6 +209,25 @@ function verifySignature(rawBody, signature) {
   }
 }
 
+// 主動推播（催繳通知等系統觸發訊息）；回傳 null 表成功、字串為錯誤訊息
+async function linePush(to, text) {
+  if (!TOKEN) return 'LINE TOKEN 未設定';
+  const r = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to, messages: [{ type: 'text', text: text.slice(0, 4900) }] }),
+  });
+  if (!r.ok) {
+    const detail = await r.text();
+    console.error('LINE push failed:', r.status, detail);
+    return `LINE 推播失敗（${r.status}）`;
+  }
+  return null;
+}
+
+function pushAvailable() { return !!TOKEN; }
+function defaultGroupId() { return [...ALLOWED_GROUPS][0] || ''; }
+
 async function lineReply(replyToken, text) {
   const r = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
@@ -380,4 +399,4 @@ function mount(app) {
   return true;
 }
 
-module.exports = { mount, handleText };
+module.exports = { mount, handleText, linePush, pushAvailable, defaultGroupId };
