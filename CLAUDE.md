@@ -90,8 +90,14 @@ club-financial/
 | `projects` | ★ 專案類別（三社聯誼、肺癌篩檢…，收入支出皆可掛）|
 | `manual_journals` | ★ 手工傳票（調整分錄；後端強制借貸平衡）|
 | `opening_balances` | ★ 期初餘額（基準日各科目/人員；累積餘絀由引擎軋差）|
-| `app_settings` | ★ 系統參數（accounting.baseDate、dues.monthlyAmount）|
-| `members` / `dues_settings` / `agency_collections` / `users` | 同前（dues_settings 加 accountCode/periodMonths）|
+| `app_settings` | ★ 系統參數（accounting.baseDate、accounting.lockDate 關帳日、dues.monthlyAmount）|
+| `members` | 名冊（status 現職/退社、leaveDate、bankAccountLast5 收款對帳用）|
+| `bank_reconciliations` | 銀行存款核對（帳戶/核對日/存摺餘額；同科目同日覆蓋）|
+| `budgets` | 年度預算（扶輪年度＋科目，整批覆寫）|
+| `attachments` | 佐證附件（refType finance/journal；壓縮後 base64，每單據最多 3 張）|
+| `notification_logs` | 催繳通知紀錄（LINE 群組推播 / 複製文字草稿）|
+| `share_links` | 唯讀分享連結（token；監事/查帳人免帳號看報表）|
+| `dues_settings` / `agency_collections` / `users` | 同前（dues_settings 加 accountCode/periodMonths）|
 
 ### 關鍵帳務規則（server 端）
 
@@ -99,6 +105,9 @@ club-financial/
 - **reopen / 取消收款 / 刪除收款單**：連動刪除收款單或回退應收狀態。
 - **開單為明確動作**：新增帳款類別或社友「不再」自動全員開單；由應收帳款頁批次產生（含季度社費快速開單，每月金額看 `dues.monthlyAmount`）。
 - **資金帳戶字彙**：`account/fromAccount/toAccount` 只能是銀行名（`一銀帳戶`）或 `經手人:<姓名>`（→1121 經手人往來按人明細）。
+- **雙日期**：finance 可填 `occurredDate`（發生日期）；引擎對收入/支出單以發生日期入帳（權責），收款單/轉帳單一律用單據日期（資金移動）。
+- **年度關帳**：`accounting.lockDate`（含）以前的 finance/手工傳票/應收異動一律 400 拒絕；年度損益結轉與 BS 承轉由引擎自動處理，關帳只是鎖唯讀。
+- **唯讀分享**：`Bearer share:<token>`（share_links 驗證）僅允許 GET；前端 `?share=<token>` 進唯讀模式（僅報表選單）。
 
 ### API 路由（前綴 `/api`，除 login 外皆需 JWT）
 
@@ -114,6 +123,12 @@ club-financial/
 | `/manual-journals` | ★ 手工傳票（借貸平衡/人員/葉節點驗證）|
 | `/opening-balances`（PUT admin） | ★ 期初餘額整批覆寫 |
 | `/settings`（PUT admin） | ★ 系統參數 |
+| `/members/batch-import` | 名冊 Excel 批次匯入（以姓名 upsert，空欄不覆蓋）|
+| `/bank-reconciliations` | 銀行存款核對 CRUD |
+| `/budgets`＋`PUT /budgets/:fy`（admin） | 年度預算查詢 / 整批覆寫 |
+| `/attachments` | 附件 metadata / 單筆含 data / 刪除（新增隨 finance、manual-journals 的 `attachments` 欄位一併寫入）|
+| `/notifications`＋`/notifications/dues-reminder` | 通知紀錄 / 催繳（LINE 群組推播或文字草稿）|
+| `/share-links`（admin） | 唯讀分享連結管理 |
 
 ## 前端
 
@@ -128,16 +143,19 @@ club-financial/
 | 元件 | 功能 |
 |------|------|
 | `Summary.vue` | 收支月報表（扶輪年度＋月；基準日後走引擎權責、基準日前歷史彙總）|
-| `BalanceSheet.vue` | ★ 資產負債表（經手人往來按人淨額歸邊為其他應收/應付）|
+| `BudgetReport.vue` | 預算執行表（科目別預算/累積實際/執行率；admin 可編製預算）|
+| `ClosingWizard.vue` | 年度關帳（admin：檢核→年度摘要→鎖帳/解除）|
+| `BalanceSheet.vue` | ★ 資產負債表（經手人往來按人淨額歸邊為其他應收/應付；含銀行存款核對區與提醒）|
 | `CashFlow.vue` | ★ 現金流量表（直接法，現金=銀行存款，依對方科目分類）|
 | `LedgerBrowser.vue` | ★ 帳簿查詢（分類帳/日記帳/試算表＋引擎診斷）|
 | `JournalEntryDialog.vue` | ★ 傳票檢視（借貸全貌、編輯原始單據入口）|
 | `ManualJournal.vue` | ★ 手工傳票 |
 | `OpeningBalance.vue` | ★ 期初餘額設定（admin）|
-| `IncomeForm.vue` / `ExpenseForm.vue` | 收入/支出單（科目 select、社友、專案、銀行/經手人帳戶、預收/預付平攤）|
-| `TransferForm.vue` | 內部轉帳單（資產科目間移轉：存入銀行、歸墊）|
-| `ReceivablesSummary.vue` | 應收帳款（季度社費快速開單、批次產生、收款/免繳/恢復）|
-| `MemberDues.vue` / `MemberList.vue` / `AgencyCollection.vue` | 繳費總覽 / 名冊 / 代收代付 |
+| `IncomeForm.vue` / `ExpenseForm.vue` | 收入/支出單（科目 select 分群＋說明副標、發生日期、附件、預收/預付平攤）|
+| `TransferForm.vue` | 內部轉帳單（資產科目間移轉：存入銀行、歸墊；可附件）|
+| `ReceivablesSummary.vue` | 應收帳款（季度快速開單、批次產生、收款/免繳/恢復、收款對帳、催繳通知、明細↔總帳勾稽）|
+| `MemberDues.vue` / `MemberList.vue` / `AgencyCollection.vue` | 繳費總覽 / 名冊（社籍、銀行末五碼、Excel 匯入）/ 代收代付 |
+| `components/AttachmentPanel.vue` | 附件元件（壓縮上傳、檢視、刪除；四張單據表單共用）|
 | `CategorySettings.vue` | 科目/專案/帳款類別/系統參數 四分頁設定 |
 | `RecordListPanel.vue` | 收/支/轉帳單據查詢（科目/專案欄）|
 | `LoginPage.vue` / `UserManagement.vue` | 登入 / 帳號管理 |
