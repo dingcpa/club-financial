@@ -285,13 +285,14 @@ app.get('/api/finance', async (req, res) => {
 
 app.post('/api/finance', async (req, res) => {
     try {
-        const { type, date, item, amount, remark, member, account, fromAccount, toAccount, startPeriod, endPeriod, accountCode, projectId, sourceReceivableId } = req.body;
+        const { type, date, item, amount, remark, member, account, fromAccount, toAccount, startPeriod, endPeriod, accountCode, projectId, sourceReceivableId, occurredDate } = req.body;
         if (!type || !date || !item || !amount) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
         const newRecord = {
             id: Date.now(),
             type, date, item,
+            occurredDate: occurredDate || null,
             member:      member      || '',
             account:     account     || '',
             fromAccount: fromAccount || '',
@@ -334,12 +335,13 @@ app.post('/api/finance/batch', async (req, res) => {
 app.put('/api/finance/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const { date, item, amount, remark, member, account, fromAccount, toAccount, startPeriod, endPeriod, accountCode, projectId } = req.body;
+        const { date, item, amount, remark, member, account, fromAccount, toAccount, startPeriod, endPeriod, accountCode, projectId, occurredDate } = req.body;
         const [rows] = await pool.query('SELECT * FROM finance WHERE id=?', [id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Record not found' });
         const current = rows[0];
         const updated = {
             date:        date        || current.date,
+            occurredDate: occurredDate !== undefined ? (occurredDate || null) : current.occurredDate,
             item:        item        || current.item,
             member:      member      !== undefined ? member      : (current.member || ''),
             amount:      amount      !== undefined ? parseFloat(amount) : current.amount,

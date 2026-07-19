@@ -7,18 +7,27 @@
     </div>
 
     <!-- Search -->
-    <v-text-field
-      v-model="search"
-      placeholder="搜尋項目、社友、金額..."
-      prepend-inner-icon="mdi-magnify"
-      :append-inner-icon="search ? 'mdi-close' : undefined"
-      @click:append-inner="search = ''"
-      density="compact"
-      variant="outlined"
-      hide-details
-      class="mb-3"
-      @update:model-value="page = 1"
-    />
+    <v-row dense class="mb-3">
+      <v-col cols="12" sm="6">
+        <v-text-field
+          v-model="search"
+          placeholder="搜尋項目、社友、科目、備註、金額..."
+          prepend-inner-icon="mdi-magnify"
+          :append-inner-icon="search ? 'mdi-close' : undefined"
+          @click:append-inner="search = ''"
+          density="compact"
+          variant="outlined"
+          hide-details
+          @update:model-value="page = 1"
+        />
+      </v-col>
+      <v-col cols="6" sm="3">
+        <v-text-field v-model="dateFrom" label="期間起" type="date" density="compact" variant="outlined" hide-details clearable @update:model-value="page = 1" />
+      </v-col>
+      <v-col cols="6" sm="3">
+        <v-text-field v-model="dateTo" label="期間迄" type="date" density="compact" variant="outlined" hide-details clearable @update:model-value="page = 1" />
+      </v-col>
+    </v-row>
 
     <!-- Table（手機橫向捲動） -->
     <v-card elevation="1" :style="`border:1px solid ${cfg.borderColor}`">
@@ -48,7 +57,10 @@
               style="cursor:pointer"
               @click="handleEditClick(r)"
             >
-              <td class="text-caption text-medium-emphasis" style="white-space:nowrap">{{ toMinguoDate(r.date) }}</td>
+              <td class="text-caption text-medium-emphasis" style="white-space:nowrap">
+                {{ toMinguoDate(r.date) }}
+                <div v-if="r.occurredDate && r.occurredDate !== r.date" class="text-caption" style="font-size:10px">發生 {{ toMinguoDate(r.occurredDate) }}</div>
+              </td>
               <td>
                 <span v-if="type === 'transfer'" class="text-caption text-primary font-weight-medium">
                   {{ fundAccountLabel(r.fromAccount) }} → {{ fundAccountLabel(r.toAccount) }}
@@ -115,6 +127,8 @@ function projectOf(r) {
 }
 
 const search = ref('')
+const dateFrom = ref(null)
+const dateTo = ref(null)
 const page = ref(1)
 
 const TYPE_CONFIG = {
@@ -142,6 +156,7 @@ const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
   return (records.value || [])
     .filter(r => r.type === type.value)
+    .filter(r => (!dateFrom.value || r.date >= dateFrom.value) && (!dateTo.value || r.date <= dateTo.value))
     .filter(r => {
       if (!q) return true
       return (
@@ -151,6 +166,8 @@ const filtered = computed(() => {
         (r.account || '').toLowerCase().includes(q) ||
         (r.fromAccount || '').toLowerCase().includes(q) ||
         (r.toAccount || '').toLowerCase().includes(q) ||
+        acctOf(r).toLowerCase().includes(q) ||
+        projectOf(r).toLowerCase().includes(q) ||
         toMinguoDate(r.date).includes(q) ||
         String(r.amount || '').includes(q)
       )

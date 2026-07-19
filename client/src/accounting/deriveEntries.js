@@ -156,7 +156,11 @@ export function deriveAllEntries({
 
   // ── 4/6/7/8/9/11/12. finance 單據 ──────────────────────────
   for (const f of finance) {
-    if (!afterBase(f.date)) continue
+    // 發生日期（權責歸屬）：收入/支出單可另填 occurredDate；收款單與轉帳單
+    // 屬資金移動，一律以單據日期入帳
+    const effDate = (f.type === 'income' || f.type === 'expense') && !f.sourceReceivableId && f.occurredDate
+      ? f.occurredDate : f.date
+    if (!afterBase(effDate)) continue
     const amount = f.amount || 0
     const projectId = f.projectId || null
 
@@ -223,7 +227,7 @@ export function deriveAllEntries({
       if (f.startPeriod && f.endPeriod) {
         push({
           id: `fin-${f.id}`,
-          date: f.date,
+          date: effDate,
           sourceType: 'income',
           sourceId: f.id,
           description: `預收收入：${f.item}（${f.member || ''}）`,
@@ -245,7 +249,7 @@ export function deriveAllEntries({
       } else {
         push({
           id: `fin-${f.id}`,
-          date: f.date,
+          date: effDate,
           sourceType: 'income',
           sourceId: f.id,
           description: `收入：${f.item}（${f.member || ''}）`,
@@ -277,7 +281,7 @@ export function deriveAllEntries({
       if (f.startPeriod && f.endPeriod) {
         push({
           id: `fin-${f.id}`,
-          date: f.date,
+          date: effDate,
           sourceType: 'expense',
           sourceId: f.id,
           description: `預付費用：${f.item}`,
@@ -299,7 +303,7 @@ export function deriveAllEntries({
       } else {
         push({
           id: `fin-${f.id}`,
-          date: f.date,
+          date: effDate,
           sourceType: 'expense',
           sourceId: f.id,
           description: `支出：${f.item}`,

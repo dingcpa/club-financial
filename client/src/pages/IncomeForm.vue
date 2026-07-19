@@ -17,10 +17,17 @@
 
       <v-form @submit.prevent="handleSubmit">
         <v-row dense>
-          <v-col cols="12" sm="6">
+          <v-col cols="12" sm="4">
             <v-text-field v-model="formData.date" label="收款日期" type="date" density="compact" variant="outlined" required />
           </v-col>
-          <v-col cols="12" sm="6">
+          <v-col cols="12" sm="4">
+            <v-text-field
+              v-model="formData.occurredDate" label="發生日期（選填）" type="date"
+              density="compact" variant="outlined" clearable
+              hint="權責歸屬月份與收款日不同時填寫" persistent-hint
+            />
+          </v-col>
+          <v-col cols="12" sm="4">
             <v-select
               v-model="formData.account"
               label="收款帳戶 / 經手人"
@@ -150,6 +157,7 @@ const isIncomeAccount = computed(() => (formData.value.accountCode || '').starts
 function makeDefaultForm() {
   return {
     date: new Date().toISOString().split('T')[0],
+    occurredDate: null,
     accountCode: '4102',
     item: '',
     member: '',
@@ -169,6 +177,7 @@ watch(editingRecord, (ed) => {
   if (ed) {
     formData.value = {
       date: ed.date,
+      occurredDate: ed.occurredDate || null,
       accountCode: ed.accountCode || resolveRecordAccount(ed) || null,
       item: ed.item,
       member: ed.member || '',
@@ -207,6 +216,7 @@ async function handleSubmit() {
   const payload = {
     type: 'income',
     date: formData.value.date,
+    occurredDate: formData.value.occurredDate || null,
     item: formData.value.item,
     member: formData.value.member || '',
     account: formData.value.account,
