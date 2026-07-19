@@ -155,6 +155,7 @@ import { useProjects } from './composables/useProjects.js'
 import { useAppSettings } from './composables/useAppSettings.js'
 import { useManualJournals } from './composables/useManualJournals.js'
 import { useOpeningBalances } from './composables/useOpeningBalances.js'
+import { useBankReconciliations } from './composables/useBankReconciliations.js'
 
 import LoginPage from './pages/LoginPage.vue'
 import Summary from './pages/Summary.vue'
@@ -196,6 +197,7 @@ const { projects, fetchProjects, addProject, updateProject, deleteProject } = us
 const { appSettings, fetchAppSettings, saveAppSettings } = useAppSettings()
 const { manualJournals, fetchManualJournals, addManualJournal, updateManualJournal, deleteManualJournal } = useManualJournals()
 const { openingBalances, fetchOpeningBalances, saveOpeningBalances } = useOpeningBalances()
+const { bankReconciliations, fetchBankReconciliations, addBankReconciliation, deleteBankReconciliation } = useBankReconciliations()
 
 // 分錄推導引擎：所有帳簿與報表的資料源
 const accounting = useAccounting({ records, receivables, agencyCollections, manualJournals, openingBalances, accounts, appSettings })
@@ -415,6 +417,10 @@ provide('fetchManualJournals', fetchManualJournals)
 provide('addManualJournal', addManualJournal)
 provide('updateManualJournal', updateManualJournal)
 provide('deleteManualJournal', deleteManualJournal)
+provide('bankReconciliations', bankReconciliations)
+provide('fetchBankReconciliations', fetchBankReconciliations)
+provide('addBankReconciliation', addBankReconciliation)
+provide('deleteBankReconciliation', deleteBankReconciliation)
 provide('openingBalances', openingBalances)
 provide('fetchOpeningBalances', fetchOpeningBalances)
 provide('saveOpeningBalances', saveOpeningBalances)
@@ -433,6 +439,7 @@ watch(isAuthenticated, (val) => {
     Promise.all([
       fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections(), fetchReceivables(),
       fetchAccounts(), fetchProjects(), fetchAppSettings(), fetchManualJournals(), fetchOpeningBalances(),
+      fetchBankReconciliations(),
     ])
   }
 }, { immediate: true })

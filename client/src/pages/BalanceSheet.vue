@@ -23,6 +23,17 @@
     <v-card-text class="pa-2 pa-sm-4 pt-0">
       <div class="text-caption text-medium-emphasis mb-3">基準日：{{ toMinguoDate(asOf) }}。點擊科目可查閱分類帳。</div>
 
+      <!-- 銀行核對提醒 -->
+      <v-alert
+        v-if="reconAlert" density="compact" variant="tonal"
+        :color="reconAlert.color" :icon="reconAlert.icon" class="mb-3"
+      >
+        <span class="text-caption">{{ reconAlert.text }}</span>
+        <template #append>
+          <v-btn size="x-small" variant="tonal" @click="showRecon = true">去核對</v-btn>
+        </template>
+      </v-alert>
+
       <v-row dense>
         <!-- 資產 -->
         <v-col cols="12" md="6">
@@ -99,18 +110,86 @@
           </v-table>
         </v-col>
       </v-row>
+
+      <!-- 銀行存款核對 -->
+      <div class="mt-4">
+        <div class="d-flex justify-space-between align-center mb-1">
+          <div class="text-subtitle-2 font-weight-bold">
+            銀行存款核對
+            <v-btn icon size="x-small" variant="text" @click="showRecon = !showRecon">
+              <v-icon size="16">{{ showRecon ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+            </v-btn>
+          </div>
+        </div>
+        <template v-if="showRecon">
+          <v-table density="compact" class="mb-2">
+            <thead>
+              <tr>
+                <th class="text-caption">銀行帳戶</th>
+                <th class="text-caption text-right">帳上餘額</th>
+                <th class="text-caption text-right">存摺餘額</th>
+                <th class="text-caption text-right">差額</th>
+                <th class="text-caption text-center">核對日</th>
+                <th class="text-caption text-center" style="width:60px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in reconRows" :key="row.code">
+                <td class="text-caption">{{ row.name }}</td>
+                <td class="text-right text-caption">{{ row.bookBalance.toLocaleString() }}</td>
+                <td class="text-right text-caption">{{ row.recon ? row.recon.statementBalance.toLocaleString() : '—' }}</td>
+                <td class="text-right text-caption" :class="row.recon ? (row.diff === 0 ? 'text-success font-weight-bold' : 'text-error font-weight-bold') : 'text-medium-emphasis'">
+                  {{ row.recon ? (row.diff === 0 ? '✓ 相符' : row.diff.toLocaleString()) : '未核對' }}
+                </td>
+                <td class="text-center text-caption text-medium-emphasis">{{ row.recon ? toMinguoDate(row.recon.reconDate) : '—' }}</td>
+                <td class="text-center">
+                  <v-btn v-if="row.recon" icon size="x-small" variant="text" color="error" title="刪除此核對紀錄" @click="handleDeleteRecon(row.recon)">
+                    <v-icon size="14">mdi-delete</v-icon>
+                  </v-btn>
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
+          <div v-if="reconDiffNote" class="text-caption text-error mb-2">
+            {{ reconDiffNote }}
+          </div>
+
+          <!-- 新增核對 -->
+          <v-card variant="outlined" class="pa-2">
+            <v-row dense align="center">
+              <v-col cols="12" sm="3">
+                <v-select v-model="reconForm.accountCode" label="銀行帳戶" :items="cashAcctOptions" density="compact" variant="outlined" hide-details />
+              </v-col>
+              <v-col cols="6" sm="3">
+                <v-text-field v-model="reconForm.reconDate" label="核對日" type="date" density="compact" variant="outlined" hide-details />
+              </v-col>
+              <v-col cols="6" sm="3">
+                <v-text-field v-model="reconForm.statementBalance" label="存摺餘額" type="number" density="compact" variant="outlined" hide-details />
+              </v-col>
+              <v-col cols="12" sm="3">
+                <v-btn color="primary" variant="flat" size="small" block prepend-icon="mdi-check" @click="handleAddRecon">記錄核對</v-btn>
+              </v-col>
+            </v-row>
+          </v-card>
+        </template>
+      </div>
     </v-card-text>
   </v-card>
 </template>
 
 <script setup>
 import { ref, computed, inject } from 'vue'
-import { balanceSheet } from '../accounting/ledger.js'
+import Swal from 'sweetalert2'
+import { balanceSheet, balancesAsOf } from '../accounting/ledger.js'
 import { CODES } from '../accounting/coa.js'
 import { fyOf, fyLabel, fyMonths, monthEnd, toMinguoDate } from '../accounting/fiscal.js'
 
 const accounting = inject('accounting')
 const drillDown = inject('drillDown')
+const accounts = inject('accounts')
+const bankReconciliations = inject('bankReconciliations')
+const addBankReconciliation = inject('addBankReconciliation')
+const deleteBankReconciliation = inject('deleteBankReconciliation')
 
 const HANDLER_CODE = CODES.HANDLER
 const showHandlers = ref(false)
@@ -145,5 +224,82 @@ function drill(row) {
 }
 function drillPerson(person) {
   drillDown({ accountCode: HANDLER_CODE, person, fy: selectedFy.value, month: null })
+}
+
+// ── 銀行存款核對 ────────────────────────────────────────────
+const showRecon = ref(false)
+const reconForm = ref({ accountCode: CODES.BANK, reconDate: today, statementBalance: '' })
+
+const cashAccounts = computed(() => (accounts?.value || []).filter(a => a.isCash && a.active))
+const cashAcctOptions = computed(() => cashAccounts.value.map(a => ({ title: `${a.code} ${a.name}`, value: a.code })))
+
+// 各銀行帳戶：最近一次核對 vs 該核對日的帳上餘額
+const reconRows = computed(() => {
+  return cashAccounts.value.map(a => {
+    const recons = (bankReconciliations?.value || [])
+      .filter(r => r.accountCode === a.code)
+      .sort((x, y) => y.reconDate.localeCompare(x.reconDate))
+    const recon = recons[0] || null
+    const { byCode } = balancesAsOf(entries.value, { asOf: recon ? recon.reconDate : asOf.value })
+    const b = byCode.get(a.code) || { debit: 0, credit: 0 }
+    const bookBalance = Math.round((b.debit - b.credit) * 100) / 100
+    const diff = recon ? Math.round((recon.statementBalance - bookBalance) * 100) / 100 : null
+    return { code: a.code, name: a.name, bookBalance, recon, diff }
+  })
+})
+
+// 提醒：未核對或差額不符 → 紅；超過 31 天未核對 → 黃
+const reconAlert = computed(() => {
+  const rows = reconRows.value
+  if (!rows.length) return null
+  const mismatch = rows.filter(r => r.recon && r.diff !== 0)
+  if (mismatch.length) {
+    return { color: 'error', icon: 'mdi-alert-circle', text: `${mismatch.map(r => r.name).join('、')} 存摺餘額與帳上不符，請查明差異（可用帳簿查詢核對明細）。` }
+  }
+  const never = rows.filter(r => !r.recon)
+  if (never.length === rows.length) {
+    return { color: 'warning', icon: 'mdi-bank-outline', text: '存摺與銀行存款尚未核對過，建議每月對一次帳。' }
+  }
+  const staleLimit = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10)
+  const stale = rows.filter(r => r.recon && r.recon.reconDate < staleLimit)
+  if (never.length || stale.length) {
+    const names = [...never, ...stale].map(r => r.name).join('、')
+    return { color: 'warning', icon: 'mdi-bank-outline', text: `${names} 超過一個月未核對存摺。` }
+  }
+  return null
+})
+
+const reconDiffNote = computed(() => {
+  const mismatch = reconRows.value.filter(r => r.recon && r.diff !== 0)
+  if (!mismatch.length) return ''
+  return '差額＝存摺餘額−帳上餘額。正數表示存摺比帳上多（可能有漏記收入或在途轉帳），負數表示帳上多（可能有漏記支出/手續費）。'
+})
+
+async function handleAddRecon() {
+  if (!reconForm.value.accountCode || !reconForm.value.reconDate || reconForm.value.statementBalance === '') {
+    Swal.fire({ icon: 'warning', title: '請填寫帳戶、核對日與存摺餘額', confirmButtonColor: '#4f46e5' }); return
+  }
+  try {
+    await addBankReconciliation({
+      accountCode: reconForm.value.accountCode,
+      reconDate: reconForm.value.reconDate,
+      statementBalance: parseFloat(reconForm.value.statementBalance) || 0,
+    })
+    reconForm.value.statementBalance = ''
+    Swal.fire({ icon: 'success', title: '已記錄核對', timer: 1200, showConfirmButton: false })
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: '記錄失敗', text: e.message, confirmButtonColor: '#ef4444' })
+  }
+}
+
+async function handleDeleteRecon(recon) {
+  const result = await Swal.fire({
+    title: '刪除核對紀錄？',
+    text: `${toMinguoDate(recon.reconDate)} 的存摺核對紀錄將刪除。`,
+    icon: 'warning', showCancelButton: true,
+    confirmButtonColor: '#ef4444', cancelButtonColor: '#6b7280',
+    confirmButtonText: '刪除', cancelButtonText: '取消',
+  })
+  if (result.isConfirmed) await deleteBankReconciliation(recon.id)
 }
 </script>

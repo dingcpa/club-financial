@@ -1112,6 +1112,52 @@ app.put('/api/settings', adminOnly, async (req, res) => {
     }
 });
 
+// ─── Bank Reconciliations（銀行存款核對）────────────────────
+app.get('/api/bank-reconciliations', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM bank_reconciliations ORDER BY reconDate DESC, accountCode ASC');
+        res.json(rows.map(r => ({ ...r, statementBalance: parseFloat(r.statementBalance) || 0 })));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read bank reconciliations' });
+    }
+});
+
+app.post('/api/bank-reconciliations', async (req, res) => {
+    try {
+        const { accountCode, reconDate, statementBalance, remark } = req.body;
+        if (!accountCode || !reconDate || statementBalance === undefined) {
+            return res.status(400).json({ error: '缺少科目、核對日或存摺餘額' });
+        }
+        const row = {
+            id: Date.now(),
+            accountCode,
+            reconDate,
+            statementBalance: parseFloat(statementBalance) || 0,
+            remark: remark || '',
+            createdBy: req.user.username,
+        };
+        // 同科目同日重複核對 → 覆蓋
+        await pool.query(
+            `INSERT INTO bank_reconciliations SET ? ON DUPLICATE KEY UPDATE statementBalance=VALUES(statementBalance), remark=VALUES(remark), createdBy=VALUES(createdBy)`,
+            [row]
+        );
+        res.status(201).json(row);
+    } catch (e) {
+        console.error('Error saving bank reconciliation:', e);
+        res.status(500).json({ error: 'Failed to save bank reconciliation' });
+    }
+});
+
+app.delete('/api/bank-reconciliations/:id', async (req, res) => {
+    try {
+        const [result] = await pool.query('DELETE FROM bank_reconciliations WHERE id=?', [parseInt(req.params.id)]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Reconciliation not found' });
+        res.json({ message: 'Reconciliation deleted' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete reconciliation' });
+    }
+});
+
 // ─── Manual Journals（手工傳票）─────────────────────────────
 async function validateJournalLines(lines) {
     if (!Array.isArray(lines) || lines.length < 2) return '傳票至少需要兩行分錄';
