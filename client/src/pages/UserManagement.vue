@@ -51,6 +51,55 @@
       </v-data-table>
     </v-card>
 
+    <!-- 唯讀分享連結 -->
+    <v-card rounded="lg" elevation="1" class="mt-6">
+      <v-card-title class="d-flex justify-space-between align-center pa-4">
+        <div class="d-flex align-center ga-2">
+          <v-icon color="primary">mdi-link-variant</v-icon>
+          <span class="text-body-1 font-weight-bold">唯讀分享連結</span>
+        </div>
+        <v-btn size="small" color="primary" prepend-icon="mdi-plus" @click="handleCreateLink">建立連結</v-btn>
+      </v-card-title>
+      <v-card-text class="pt-0">
+        <div class="text-caption text-medium-emphasis mb-2">
+          提供監事、查帳人免帳號檢視報表（收支月報、預算、資產負債表、現金流量、帳簿查詢）；僅可讀取，無法異動資料。
+        </div>
+        <v-table density="compact">
+          <thead>
+            <tr>
+              <th class="text-caption">名稱</th>
+              <th class="text-caption">連結</th>
+              <th class="text-caption text-center">到期日</th>
+              <th class="text-caption text-center">狀態</th>
+              <th class="text-caption text-center" style="width:120px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="!shareLinks.length">
+              <td colspan="5" class="text-center text-medium-emphasis pa-4">尚無分享連結</td>
+            </tr>
+            <tr v-for="l in shareLinks" :key="l.id">
+              <td class="text-caption">{{ l.label }}</td>
+              <td class="text-caption" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                {{ shareUrl(l) }}
+              </td>
+              <td class="text-center text-caption">{{ l.expiresAt || '不限' }}</td>
+              <td class="text-center">
+                <v-chip size="x-small" :color="l.active ? 'success' : 'grey'" variant="tonal">{{ l.active ? '有效' : '已停用' }}</v-chip>
+              </td>
+              <td class="text-center">
+                <v-btn icon size="x-small" variant="text" color="primary" title="複製連結" @click="copyLink(l)"><v-icon size="14">mdi-content-copy</v-icon></v-btn>
+                <v-btn icon size="x-small" variant="text" :color="l.active ? 'warning' : 'success'" :title="l.active ? '停用' : '啟用'" @click="toggleLink(l)">
+                  <v-icon size="14">{{ l.active ? 'mdi-pause' : 'mdi-play' }}</v-icon>
+                </v-btn>
+                <v-btn icon size="x-small" variant="text" color="error" title="刪除" @click="deleteLink(l)"><v-icon size="14">mdi-delete</v-icon></v-btn>
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
     <!-- 新增/編輯 Dialog -->
     <v-dialog v-model="dialog" max-width="480" :fullscreen="xs">
       <v-card :title="editingUser ? '編輯使用者' : '新增使用者'" rounded="lg">
@@ -153,6 +202,67 @@ async function fetchUsers() {
   }
 }
 
+// ── 唯讀分享連結 ──
+const shareLinks = ref([])
+
+function shareUrl(l) {
+  return `${location.origin}/?share=${l.token}`
+}
+
+async function fetchShareLinks() {
+  try {
+    const res = await apiFetch('/api/share-links')
+    shareLinks.value = await res.json()
+  } catch { shareLinks.value = [] }
+}
+
+async function handleCreateLink() {
+  const { value: formValues } = await Swal.fire({
+    title: '建立唯讀分享連結',
+    html:
+      '<input id="sl-label" class="swal2-input" placeholder="名稱（例：33屆監事查帳）">' +
+      '<input id="sl-expires" type="date" class="swal2-input" title="到期日（留空＝不限）">',
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonColor: '#4f46e5', cancelButtonColor: '#6b7280',
+    confirmButtonText: '建立', cancelButtonText: '取消',
+    preConfirm: () => ({
+      label: document.getElementById('sl-label').value,
+      expiresAt: document.getElementById('sl-expires').value,
+    }),
+  })
+  if (!formValues) return
+  const res = await apiFetch('/api/share-links', { method: 'POST', body: JSON.stringify(formValues) })
+  if (res.ok) {
+    const link = await res.json()
+    await fetchShareLinks()
+    await navigator.clipboard.writeText(shareUrl(link)).catch(() => {})
+    Swal.fire({ icon: 'success', title: '連結已建立並複製', text: shareUrl(link), confirmButtonColor: '#4f46e5' })
+  }
+}
+
+async function copyLink(l) {
+  await navigator.clipboard.writeText(shareUrl(l))
+  Swal.fire({ icon: 'success', title: '已複製連結', timer: 1200, showConfirmButton: false })
+}
+
+async function toggleLink(l) {
+  const res = await apiFetch(`/api/share-links/${l.id}`, { method: 'PUT', body: JSON.stringify({ active: !l.active }) })
+  if (res.ok) await fetchShareLinks()
+}
+
+async function deleteLink(l) {
+  const result = await Swal.fire({
+    title: '刪除分享連結？', text: `「${l.label}」將立即失效。`, icon: 'warning',
+    showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#6b7280',
+    confirmButtonText: '刪除', cancelButtonText: '取消',
+  })
+  if (result.isConfirmed) {
+    await apiFetch(`/api/share-links/${l.id}`, { method: 'DELETE' })
+    await fetchShareLinks()
+  }
+}
+
 function openCreate() {
   editingUser.value = null
   form.value = { username: '', displayName: '', password: '', role: 'user' }
@@ -232,5 +342,5 @@ async function confirmDelete(u) {
   await fetchUsers()
 }
 
-onMounted(fetchUsers)
+onMounted(() => { fetchUsers(); fetchShareLinks() })
 </script>

@@ -64,7 +64,7 @@
         </v-list-group>
 
         <!-- 社友管理 -->
-        <v-list-group value="members">
+        <v-list-group v-if="!isViewer" value="members">
           <template #activator="{ props }">
             <v-list-item v-bind="props" prepend-icon="mdi-account-group" title="社友管理" />
           </template>
@@ -80,7 +80,7 @@
         </v-list-group>
 
         <!-- 收支單據 -->
-        <v-list-group value="transactions">
+        <v-list-group v-if="!isViewer" value="transactions">
           <template #activator="{ props }">
             <v-list-item v-bind="props" prepend-icon="mdi-file-document-outline" title="收支單據" />
           </template>
@@ -180,7 +180,7 @@ import BudgetReport from './pages/BudgetReport.vue'
 import { useAccounting } from './composables/useAccounting.js'
 
 // ----- Auth -----
-const { isAuthenticated, isAdmin, user, logout } = useAuth()
+const { isAuthenticated, isAdmin, isViewer, user, logout } = useAuth()
 const { smAndDown } = useDisplay()
 const mobile = smAndDown
 
@@ -261,12 +261,14 @@ const pageMap = {
 }
 const currentPage = computed(() => pageMap[activeTab.value] || Summary)
 
-// 需要管理員的頁面清單
+// 需要管理員的頁面清單；唯讀分享僅可看報表
 const ADMIN_TABS = ['user-management', 'opening-balance']
+const VIEWER_TABS = ['summary', 'budget', 'balance-sheet', 'cash-flow', 'ledger']
 
 // ----- 導覽 -----
 function navigate(tab) {
   if (ADMIN_TABS.includes(tab) && !isAdmin.value) return
+  if (isViewer.value && !VIEWER_TABS.includes(tab)) return
   activeTab.value = tab
   editingRecord.value = null
   if (mobile.value) drawer.value = false
@@ -274,6 +276,7 @@ function navigate(tab) {
 
 function setActiveTab(tab) {
   if (ADMIN_TABS.includes(tab) && !isAdmin.value) return
+  if (isViewer.value && !VIEWER_TABS.includes(tab)) return
   activeTab.value = tab
 }
 
@@ -441,6 +444,7 @@ provide('fetchOpeningBalances', fetchOpeningBalances)
 provide('saveOpeningBalances', saveOpeningBalances)
 provide('accounting', accounting)
 provide('drillContext', drillContext)
+provide('isViewer', isViewer)
 // 各報表點金額 → 設定篩選脈絡並切到帳簿查詢分類帳
 provide('drillDown', (ctx) => {
   drillContext.value = ctx

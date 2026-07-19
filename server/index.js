@@ -32,11 +32,28 @@ if (require('fs').existsSync(clientDist)) {
 }
 
 // ─── Auth ───────────────────────────────────────────────────
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
     const auth = req.headers.authorization;
     if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+    const raw = auth.slice(7);
+    // 唯讀分享連結：Bearer share:<token>，僅允許 GET
+    if (raw.startsWith('share:')) {
+        try {
+            const [rows] = await pool.query('SELECT * FROM share_links WHERE token=? AND active=1', [raw.slice(6)]);
+            if (!rows.length) return res.status(401).json({ error: '分享連結無效或已停用' });
+            const link = rows[0];
+            if (link.expiresAt && link.expiresAt < new Date().toISOString().slice(0, 10)) {
+                return res.status(401).json({ error: '分享連結已過期' });
+            }
+            if (req.method !== 'GET') return res.status(403).json({ error: '唯讀分享連結僅可檢視' });
+            req.user = { id: 0, username: 'share-viewer', displayName: link.label || '唯讀檢視', role: 'viewer' };
+            return next();
+        } catch {
+            return res.status(500).json({ error: '分享連結驗證失敗' });
+        }
+    }
     try {
-        req.user = jwt.verify(auth.slice(7), JWT_SECRET);
+        req.user = jwt.verify(raw, JWT_SECRET);
         next();
     } catch {
         res.status(401).json({ error: 'Token 無效或已過期' });
@@ -1496,6 +1513,63 @@ app.delete('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
         res.json({ message: '刪除成功' });
     } catch (e) {
         res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
+
+// ─── Share Links（唯讀分享連結，admin）──────────────────────
+const crypto = require('crypto');
+
+app.get('/api/share-links', adminOnly, async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM share_links ORDER BY createdAt DESC');
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read share links' });
+    }
+});
+
+app.post('/api/share-links', adminOnly, async (req, res) => {
+    try {
+        const { label, expiresAt } = req.body || {};
+        const link = {
+            id: Date.now(),
+            token: crypto.randomBytes(24).toString('hex'),
+            label: label || '唯讀檢視',
+            expiresAt: expiresAt || null,
+            active: 1,
+            createdBy: req.user.username,
+        };
+        await pool.query('INSERT INTO share_links SET ?', [link]);
+        res.status(201).json(link);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to create share link' });
+    }
+});
+
+app.put('/api/share-links/:id', adminOnly, async (req, res) => {
+    try {
+        const { active, label, expiresAt } = req.body || {};
+        const updated = {};
+        if (active !== undefined) updated.active = active ? 1 : 0;
+        if (label !== undefined) updated.label = label;
+        if (expiresAt !== undefined) updated.expiresAt = expiresAt || null;
+        if (!Object.keys(updated).length) return res.status(400).json({ error: '無可更新欄位' });
+        const [result] = await pool.query('UPDATE share_links SET ? WHERE id=?', [updated, parseInt(req.params.id)]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Share link not found' });
+        const [rows] = await pool.query('SELECT * FROM share_links WHERE id=?', [parseInt(req.params.id)]);
+        res.json(rows[0]);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to update share link' });
+    }
+});
+
+app.delete('/api/share-links/:id', adminOnly, async (req, res) => {
+    try {
+        const [result] = await pool.query('DELETE FROM share_links WHERE id=?', [parseInt(req.params.id)]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Share link not found' });
+        res.json({ message: 'Share link deleted' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete share link' });
     }
 });
 
