@@ -103,6 +103,26 @@ function parseFinance(row) {
     return { ...row, amount: parseFloat(row.amount) || 0 };
 }
 
+// ── 年度關帳鎖：lockDate（含）以前的單據不可異動 ───────────
+async function getLockDate() {
+    const [rows] = await pool.query(`SELECT v FROM app_settings WHERE k='accounting.lockDate'`);
+    return rows.length ? (rows[0].v || '') : '';
+}
+
+// 任一日期落在關帳期間 → 回 400 並回傳 false
+async function assertUnlocked(res, ...dates) {
+    const lock = await getLockDate();
+    if (!lock) return true;
+    for (const d of dates) {
+        const s = d ? String(d).slice(0, 10) : '';
+        if (s && s <= lock) {
+            res.status(400).json({ error: `帳務已關帳至 ${lock}，${s} 之單據不可異動（管理員可於「年度關帳」頁解除）` });
+            return false;
+        }
+    }
+    return true;
+}
+
 // ─── Members ───────────────────────────────────────────────
 app.get('/api/members', async (req, res) => {
     try {
@@ -306,6 +326,7 @@ app.post('/api/finance', async (req, res) => {
         if (!type || !date || !item || !amount) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
+        if (!await assertUnlocked(res, date, occurredDate)) return;
         const newRecord = {
             id: Date.now(),
             type, date, item,
@@ -335,6 +356,7 @@ app.post('/api/finance/batch', async (req, res) => {
     try {
         const records = req.body;
         if (!Array.isArray(records)) return res.status(400).json({ error: 'Payload must be an array' });
+        if (!await assertUnlocked(res, ...records.map(r => r.date))) return;
         const newRecords = records.map((r, i) => ({
             ...r,
             id:     Date.now() + i,
@@ -357,6 +379,7 @@ app.put('/api/finance/:id', async (req, res) => {
         const [rows] = await pool.query('SELECT * FROM finance WHERE id=?', [id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Record not found' });
         const current = rows[0];
+        if (!await assertUnlocked(res, current.date, date, occurredDate)) return;
         const updated = {
             date:        date        || current.date,
             occurredDate: occurredDate !== undefined ? (occurredDate || null) : current.occurredDate,
@@ -385,6 +408,7 @@ app.delete('/api/finance/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const [rows] = await pool.query('SELECT * FROM finance WHERE id=?', [id]);
+        if (rows.length && !await assertUnlocked(res, rows[0].date)) return;
         const [result] = await pool.query('DELETE FROM finance WHERE id=?', [id]);
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Record not found' });
         await pool.query(`DELETE FROM attachments WHERE refType='finance' AND refId=?`, [id]);
@@ -643,6 +667,7 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
         if (!memberName || !date || !account || !receivableIds?.length) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
+        if (!await assertUnlocked(res, date)) return;
 
         // 查出指定的 receivables
         const placeholders = receivableIds.map(() => '?').join(',');
@@ -764,6 +789,7 @@ app.post('/api/receivables/batch-generate', async (req, res) => {
         }
         const amt = parseFloat(amount) || 0;
         const dueYear = (dueDate && dueDate.substring(0, 4)) || new Date().getFullYear().toString();
+        if (!await assertUnlocked(res, dueDate)) return;
         const acct = await lookupIncomeAccount(category, incomeAccount);
         // 科目/攤提期間：未指定時依帳款類別設定推得
         const [setting] = await pool.query('SELECT accountCode, periodMonths FROM dues_settings WHERE category=?', [category]);
@@ -828,6 +854,7 @@ app.put('/api/receivables/:id', async (req, res) => {
             return res.status(400).json({ error: '已收款的帳款不可編輯，請先恢復' });
         }
         const { memberName, amount, dueDate, sourceRef, incomeAccount, accountCode, periodStart, periodEnd } = req.body;
+        if (!await assertUnlocked(res, cur.dueDate, dueDate)) return;
         const updated = {
             memberName:    memberName    !== undefined ? memberName              : cur.memberName,
             sourceRef:     sourceRef     !== undefined ? sourceRef               : cur.sourceRef,
@@ -851,6 +878,8 @@ app.put('/api/receivables/:id', async (req, res) => {
 app.delete('/api/receivables/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
+        const [cur] = await pool.query('SELECT dueDate FROM receivables WHERE id=?', [id]);
+        if (cur.length && !await assertUnlocked(res, cur[0].dueDate)) return;
         const [result] = await pool.query('DELETE FROM receivables WHERE id=?', [id]);
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Receivable not found' });
         res.json({ message: 'Receivable deleted' });
@@ -865,6 +894,7 @@ app.post('/api/receivables/:id/collect', async (req, res) => {
         const id = parseInt(req.params.id);
         const { date, amount, account, remark } = req.body;
         if (!date || !account) return res.status(400).json({ error: '缺少收款日期或收款帳戶' });
+        if (!await assertUnlocked(res, date)) return;
         const [rows] = await pool.query('SELECT * FROM receivables WHERE id=?', [id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Receivable not found' });
         const r = rows[0];
@@ -954,6 +984,7 @@ app.put('/api/receivables/:id/reopen', async (req, res) => {
         const [rows] = await pool.query('SELECT * FROM receivables WHERE id=?', [id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Receivable not found' });
         if (rows[0].status === 'pending') return res.status(400).json({ error: '已是 pending 狀態' });
+        if (!await assertUnlocked(res, rows[0].dueDate, rows[0].paidDate)) return;
         // 一併刪除此帳款已產生的收款單（引擎分錄隨之消失，帳自動回復）
         await pool.query('DELETE FROM finance WHERE sourceReceivableId=?', [id]);
         await pool.query(
@@ -1367,6 +1398,7 @@ app.post('/api/manual-journals', async (req, res) => {
     try {
         const { date, description, lines } = req.body;
         if (!date) return res.status(400).json({ error: '缺少傳票日期' });
+        if (!await assertUnlocked(res, date)) return;
         const err = await validateJournalLines(lines);
         if (err) return res.status(400).json({ error: err });
         const journal = {
@@ -1390,6 +1422,7 @@ app.put('/api/manual-journals/:id', async (req, res) => {
         const [rows] = await pool.query('SELECT * FROM manual_journals WHERE id=?', [id]);
         if (!rows.length) return res.status(404).json({ error: 'Journal not found' });
         const { date, description, lines } = req.body;
+        if (!await assertUnlocked(res, rows[0].date, date)) return;
         const err = await validateJournalLines(lines !== undefined ? lines : JSON.parse(rows[0].lines));
         if (err) return res.status(400).json({ error: err });
         const updated = {
@@ -1409,6 +1442,8 @@ app.put('/api/manual-journals/:id', async (req, res) => {
 app.delete('/api/manual-journals/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
+        const [cur] = await pool.query('SELECT date FROM manual_journals WHERE id=?', [id]);
+        if (cur.length && !await assertUnlocked(res, cur[0].date)) return;
         const [result] = await pool.query('DELETE FROM manual_journals WHERE id=?', [id]);
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Journal not found' });
         await pool.query(`DELETE FROM attachments WHERE refType='journal' AND refId=?`, [id]);

@@ -177,6 +177,7 @@ import LedgerBrowser from './pages/LedgerBrowser.vue'
 import ManualJournal from './pages/ManualJournal.vue'
 import OpeningBalance from './pages/OpeningBalance.vue'
 import BudgetReport from './pages/BudgetReport.vue'
+import ClosingWizard from './pages/ClosingWizard.vue'
 import { useAccounting } from './composables/useAccounting.js'
 
 // ----- Auth -----
@@ -234,6 +235,7 @@ const transactionItems = [
 ]
 const adminItems = [
   { tab: 'opening-balance', icon: 'mdi-scale-balance', title: '期初餘額設定' },
+  { tab: 'closing', icon: 'mdi-lock-check', title: '年度關帳' },
   { tab: 'user-management', icon: 'mdi-account-key', title: '帳號管理' },
 ]
 
@@ -257,12 +259,13 @@ const pageMap = {
   'ledger': LedgerBrowser,
   'journal-entry': ManualJournal,
   'opening-balance': OpeningBalance,
+  'closing': ClosingWizard,
   'user-management': UserManagement,
 }
 const currentPage = computed(() => pageMap[activeTab.value] || Summary)
 
 // 需要管理員的頁面清單；唯讀分享僅可看報表
-const ADMIN_TABS = ['user-management', 'opening-balance']
+const ADMIN_TABS = ['user-management', 'opening-balance', 'closing']
 const VIEWER_TABS = ['summary', 'budget', 'balance-sheet', 'cash-flow', 'ledger']
 
 // ----- 導覽 -----
