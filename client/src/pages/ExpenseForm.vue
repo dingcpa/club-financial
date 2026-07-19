@@ -109,6 +109,8 @@
           density="compact" variant="outlined" class="mb-3"
         />
 
+        <AttachmentPanel v-model="pendingAttachments" ref-type="finance" :ref-id="editingRecord?.id || null" />
+
         <div class="d-flex flex-wrap ga-2">
           <v-btn type="submit" color="error" variant="flat" prepend-icon="mdi-content-save" class="flex-grow-1">
             {{ editingRecord ? '更新支出' : '儲存支出' }}
@@ -128,6 +130,7 @@ import {
   expenseAccountOptions, buildFundAccountOptions, normalizeFundValue,
   resolveRecordAccount, accountTitle, BANK_NAME,
 } from '../accounting/coa.js'
+import AttachmentPanel from '../components/AttachmentPanel.vue'
 
 const members = inject('members')
 const accounts = inject('accounts')
@@ -170,6 +173,7 @@ function makeDefaultForm() {
 }
 
 const formData = ref(makeDefaultForm())
+const pendingAttachments = ref([])
 
 watch(editingRecord, (ed) => {
   if (ed) {
@@ -223,6 +227,7 @@ async function handleSubmit() {
     remark: formData.value.remark,
     startPeriod: usePrepaid ? formData.value.startPeriod : null,
     endPeriod: usePrepaid ? formData.value.endPeriod : null,
+    attachments: pendingAttachments.value,
   }
   if (editingRecord.value) {
     await updateRecord(editingRecord.value.id, payload)
@@ -230,6 +235,7 @@ async function handleSubmit() {
     await addRecord(payload)
     formData.value = makeDefaultForm()
   }
+  pendingAttachments.value = []
 }
 
 async function handleDelete() {

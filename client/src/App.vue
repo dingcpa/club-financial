@@ -157,6 +157,7 @@ import { useManualJournals } from './composables/useManualJournals.js'
 import { useOpeningBalances } from './composables/useOpeningBalances.js'
 import { useBankReconciliations } from './composables/useBankReconciliations.js'
 import { useBudgets } from './composables/useBudgets.js'
+import { useAttachments } from './composables/useAttachments.js'
 
 import LoginPage from './pages/LoginPage.vue'
 import Summary from './pages/Summary.vue'
@@ -201,6 +202,7 @@ const { manualJournals, fetchManualJournals, addManualJournal, updateManualJourn
 const { openingBalances, fetchOpeningBalances, saveOpeningBalances } = useOpeningBalances()
 const { bankReconciliations, fetchBankReconciliations, addBankReconciliation, deleteBankReconciliation } = useBankReconciliations()
 const { budgets, fetchBudgets, saveBudgets } = useBudgets()
+const { attachmentsMeta, fetchAttachmentsMeta, getAttachmentData, deleteAttachment } = useAttachments()
 
 // 分錄推導引擎：所有帳簿與報表的資料源
 const accounting = useAccounting({ records, receivables, agencyCollections, manualJournals, openingBalances, accounts, appSettings })
@@ -292,6 +294,7 @@ async function handleLogout() {
 // ----- 業務 handlers -----
 async function addRecord(newRecord) {
   await apiAddRecord(newRecord)
+  if (newRecord.attachments?.length) fetchAttachmentsMeta()
   activeTab.value = 'summary'
 }
 
@@ -307,6 +310,7 @@ async function addRecordsBatchAndGoToDues(newRecords) {
 
 async function updateRecord(id, updatedRecord) {
   await apiUpdateRecord(id, updatedRecord)
+  if (updatedRecord.attachments?.length) fetchAttachmentsMeta()
   editingRecord.value = null
   activeTab.value = 'summary'
 }
@@ -422,6 +426,10 @@ provide('fetchManualJournals', fetchManualJournals)
 provide('addManualJournal', addManualJournal)
 provide('updateManualJournal', updateManualJournal)
 provide('deleteManualJournal', deleteManualJournal)
+provide('attachmentsMeta', attachmentsMeta)
+provide('fetchAttachmentsMeta', fetchAttachmentsMeta)
+provide('getAttachmentData', getAttachmentData)
+provide('deleteAttachment', deleteAttachment)
 provide('budgets', budgets)
 provide('saveBudgets', saveBudgets)
 provide('bankReconciliations', bankReconciliations)
@@ -446,7 +454,7 @@ watch(isAuthenticated, (val) => {
     Promise.all([
       fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections(), fetchReceivables(),
       fetchAccounts(), fetchProjects(), fetchAppSettings(), fetchManualJournals(), fetchOpeningBalances(),
-      fetchBankReconciliations(), fetchBudgets(),
+      fetchBankReconciliations(), fetchBudgets(), fetchAttachmentsMeta(),
     ])
   }
 }, { immediate: true })

@@ -51,6 +51,8 @@
           class="mb-3"
         />
 
+        <AttachmentPanel v-model="pendingAttachments" ref-type="finance" :ref-id="editingRecord?.id || null" />
+
         <div class="d-flex flex-wrap ga-2">
           <v-btn type="submit" color="primary" variant="flat" prepend-icon="mdi-content-save" class="flex-grow-1">
             {{ editingRecord ? '更新轉帳' : '儲存轉帳' }}
@@ -67,6 +69,7 @@
 import { ref, computed, watch, inject } from 'vue'
 import Swal from 'sweetalert2'
 import { buildFundAccountOptions, normalizeFundValue, fundAccountLabel, BANK_NAME, handlerFundValue } from '../accounting/coa.js'
+import AttachmentPanel from '../components/AttachmentPanel.vue'
 
 const members = inject('members')
 const accounts = inject('accounts')
@@ -89,6 +92,7 @@ function makeDefaultForm() {
 }
 
 const formData = ref(makeDefaultForm())
+const pendingAttachments = ref([])
 
 watch(editingRecord, (ed) => {
   if (ed) {
@@ -116,6 +120,7 @@ async function handleSubmit() {
     item: `內部轉帳: ${fundAccountLabel(formData.value.fromAccount)} ➡ ${fundAccountLabel(formData.value.toAccount)}`,
     type: 'transfer',
     amount: parseFloat(formData.value.amount),
+    attachments: pendingAttachments.value,
   }
   if (editingRecord.value) {
     await updateRecord(editingRecord.value.id, payload)
@@ -123,6 +128,7 @@ async function handleSubmit() {
     await addRecord(payload)
     formData.value = makeDefaultForm()
   }
+  pendingAttachments.value = []
 }
 
 async function handleDelete() {

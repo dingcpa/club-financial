@@ -66,6 +66,7 @@
                   {{ fundAccountLabel(r.fromAccount) }} → {{ fundAccountLabel(r.toAccount) }}
                 </span>
                 <span v-else class="text-caption font-weight-medium">{{ r.item }}</span>
+                <v-icon v-if="attachCountOf(r)" size="12" color="primary" class="ml-1" :title="`${attachCountOf(r)} 張附件`">mdi-paperclip</v-icon>
               </td>
               <td v-if="type !== 'transfer'" class="text-caption d-none d-sm-table-cell">
                 <span v-if="acctOf(r)" class="text-medium-emphasis">{{ acctOf(r) }}</span>
@@ -112,6 +113,11 @@ const PAGE_SIZE = 15
 const records = inject('records')
 const accounts = inject('accounts')
 const projects = inject('projects')
+const attachmentsMeta = inject('attachmentsMeta')
+
+function attachCountOf(r) {
+  return (attachmentsMeta?.value || []).filter(a => a.refType === 'finance' && String(a.refId) === String(r.id)).length
+}
 const activeTab = inject('activeTab')
 const editingRecord = inject('editingRecord')
 const handleEditClick = inject('handleEditClick')

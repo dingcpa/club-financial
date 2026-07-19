@@ -83,6 +83,8 @@
             </v-chip>
           </div>
 
+          <AttachmentPanel v-model="pendingAttachments" ref-type="journal" :ref-id="editing?.id || null" />
+
           <v-btn color="primary" variant="flat" prepend-icon="mdi-content-save" block :disabled="!balanced" @click="handleSave">儲存傳票</v-btn>
         </v-card-text>
       </v-card>
@@ -95,6 +97,7 @@ import { ref, computed, inject } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
 import { toMinguoDate } from '../accounting/fiscal.js'
+import AttachmentPanel from '../components/AttachmentPanel.vue'
 
 const { xs } = useDisplay()
 
@@ -107,6 +110,8 @@ const deleteManualJournal = inject('deleteManualJournal')
 
 const modal = ref(false)
 const editing = ref(null)
+const pendingAttachments = ref([])
+const fetchAttachmentsMeta = inject('fetchAttachmentsMeta')
 
 // 葉節點科目（有細項的上層科目不可記帳）
 const acctOptions = computed(() => {
@@ -136,6 +141,7 @@ function totalOf(j) {
 
 function openModal(j) {
   editing.value = j
+  pendingAttachments.value = []
   form.value = j
     ? {
         date: j.date,
@@ -156,11 +162,14 @@ async function handleSave() {
       credit: parseFloat(l.credit) || 0,
     }))
   try {
+    const payload = { date: form.value.date, description: form.value.description, lines, attachments: pendingAttachments.value }
     if (editing.value) {
-      await updateManualJournal(editing.value.id, { date: form.value.date, description: form.value.description, lines })
+      await updateManualJournal(editing.value.id, payload)
     } else {
-      await addManualJournal({ date: form.value.date, description: form.value.description, lines })
+      await addManualJournal(payload)
     }
+    if (pendingAttachments.value.length) fetchAttachmentsMeta()
+    pendingAttachments.value = []
     modal.value = false
   } catch (e) {
     Swal.fire({ icon: 'error', title: '儲存失敗', text: e.message, confirmButtonColor: '#ef4444' })

@@ -16,8 +16,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-// 保留原始 body 供 LINE webhook 簽章驗證
-app.use(bodyParser.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
+// 保留原始 body 供 LINE webhook 簽章驗證；放寬上限供佐證附件（壓縮後 base64 圖片）
+app.use(bodyParser.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
 
 // LINE 財務精靈（設定 ROTARY_* 環境變數才掛載；LINE 簽章即其驗證，不走 JWT）
 const lineBot = require('./line-bot');
@@ -306,6 +306,7 @@ app.post('/api/finance', async (req, res) => {
             sourceReceivableId: sourceReceivableId || null,
         };
         await pool.query('INSERT INTO finance SET ?', [newRecord]);
+        await saveAttachments('finance', newRecord.id, req.body.attachments, req.user.username);
         res.status(201).json(newRecord);
     } catch (e) {
         console.error('Error saving data:', e);
@@ -355,6 +356,7 @@ app.put('/api/finance/:id', async (req, res) => {
             projectId:   projectId   !== undefined ? (projectId   || null) : current.projectId,
         };
         await pool.query('UPDATE finance SET ? WHERE id=?', [updated, id]);
+        await saveAttachments('finance', id, req.body.attachments, req.user.username);
         res.json({ ...current, ...updated });
     } catch (e) {
         console.error('Error updating data:', e);
@@ -368,6 +370,7 @@ app.delete('/api/finance/:id', async (req, res) => {
         const [rows] = await pool.query('SELECT * FROM finance WHERE id=?', [id]);
         const [result] = await pool.query('DELETE FROM finance WHERE id=?', [id]);
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Record not found' });
+        await pool.query(`DELETE FROM attachments WHERE refType='finance' AND refId=?`, [id]);
         // 刪除收款單 → 同步回退應收帳款的已收金額與狀態
         if (rows.length && rows[0].sourceReceivableId) {
             const [rv] = await pool.query('SELECT * FROM receivables WHERE id=?', [rows[0].sourceReceivableId]);
@@ -1114,6 +1117,62 @@ app.put('/api/settings', adminOnly, async (req, res) => {
     }
 });
 
+// ─── Attachments（佐證附件）─────────────────────────────────
+// data 為前端壓縮後的 dataURL；單筆上限 3MB、每單據最多 3 張
+async function saveAttachments(refType, refId, attachments, username) {
+    if (!Array.isArray(attachments) || !attachments.length) return;
+    const [existing] = await pool.query('SELECT COUNT(*) AS cnt FROM attachments WHERE refType=? AND refId=?', [refType, refId]);
+    let room = 3 - existing[0].cnt;
+    for (let i = 0; i < attachments.length && room > 0; i++, room--) {
+        const a = attachments[i];
+        if (!a || !a.data || String(a.data).length > 3 * 1024 * 1024 * 1.4) continue;
+        await pool.query('INSERT INTO attachments SET ?', [{
+            id: Date.now() + i,
+            refType,
+            refId,
+            filename: a.filename || `attachment-${i + 1}.jpg`,
+            mimeType: a.mimeType || 'image/jpeg',
+            size: parseInt(a.size) || 0,
+            data: String(a.data),
+            createdBy: username || null,
+        }]);
+    }
+}
+
+// 全部附件 metadata（不含 data，供列表顯示 📎）
+app.get('/api/attachments', async (req, res) => {
+    try {
+        const { refType, refId } = req.query;
+        let sql = 'SELECT id, refType, refId, filename, mimeType, size, createdBy, createdAt FROM attachments';
+        const params = [];
+        if (refType && refId) { sql += ' WHERE refType=? AND refId=?'; params.push(refType, parseInt(refId)); }
+        const [rows] = await pool.query(sql + ' ORDER BY id ASC', params);
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read attachments' });
+    }
+});
+
+app.get('/api/attachments/:id', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM attachments WHERE id=?', [parseInt(req.params.id)]);
+        if (!rows.length) return res.status(404).json({ error: 'Attachment not found' });
+        res.json(rows[0]);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read attachment' });
+    }
+});
+
+app.delete('/api/attachments/:id', async (req, res) => {
+    try {
+        const [result] = await pool.query('DELETE FROM attachments WHERE id=?', [parseInt(req.params.id)]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Attachment not found' });
+        res.json({ message: 'Attachment deleted' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete attachment' });
+    }
+});
+
 // ─── Budgets（年度預算）─────────────────────────────────────
 app.get('/api/budgets', async (req, res) => {
     try {
@@ -1254,6 +1313,7 @@ app.post('/api/manual-journals', async (req, res) => {
             createdBy: req.user.username,
         };
         await pool.query('INSERT INTO manual_journals SET ?', [journal]);
+        await saveAttachments('journal', journal.id, req.body.attachments, req.user.username);
         res.status(201).json(parseJournal(journal));
     } catch (e) {
         res.status(500).json({ error: 'Failed to create manual journal' });
@@ -1274,6 +1334,7 @@ app.put('/api/manual-journals/:id', async (req, res) => {
             lines:       lines       !== undefined ? JSON.stringify(lines) : rows[0].lines,
         };
         await pool.query('UPDATE manual_journals SET ? WHERE id=?', [updated, id]);
+        await saveAttachments('journal', id, req.body.attachments, req.user.username);
         const [r2] = await pool.query('SELECT * FROM manual_journals WHERE id=?', [id]);
         res.json(parseJournal(r2[0]));
     } catch (e) {
@@ -1286,6 +1347,7 @@ app.delete('/api/manual-journals/:id', async (req, res) => {
         const id = parseInt(req.params.id);
         const [result] = await pool.query('DELETE FROM manual_journals WHERE id=?', [id]);
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Journal not found' });
+        await pool.query(`DELETE FROM attachments WHERE refType='journal' AND refId=?`, [id]);
         res.json({ message: 'Journal deleted' });
     } catch (e) {
         res.status(500).json({ error: 'Failed to delete manual journal' });
