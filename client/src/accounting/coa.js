@@ -156,19 +156,51 @@ function leavesOf(accounts) {
   return list.filter(a => !hasChildren.has(a.code))
 }
 
-// 收入單「入帳科目」：收入科目 + 代收付/暫收（負債）科目
+// 科目 → select item（description 顯示為副標，執秘可直接看科目用途）
+function acctItem(a, titleSuffix = '') {
+  const item = { title: `${a.code} ${a.name}${titleSuffix}`, value: a.code }
+  if (a.description) item.props = { subtitle: a.description }
+  return item
+}
+
+// 收入科目的語意分群（無上層科目時使用；未列者歸入其他收入類）
+const INCOME_GROUPS = [
+  { title: '社費類收入', codes: ['4101', '4106'] },
+  { title: '捐贈與活動收入', codes: ['4102', '4107', '4108', '4109'] },
+  { title: '其他收入類', codes: ['4103', '4104', '4105'] },
+]
+
+// 收入單「入帳科目」：收入科目（語意/上層分群）+ 代收付/暫收（負債）科目
 export function incomeAccountOptions(accounts) {
+  const list = (accounts || []).filter(a => a.active)
   const leaves = leavesOf(accounts)
   const income = leaves.filter(a => a.type === 'income')
   const liab = leaves.filter(a => a.type === 'liability' && [CODES.AGENCY, CODES.TEMP_RECEIPT].includes(a.code))
   const items = []
-  if (income.length) {
-    items.push({ type: 'subheader', title: '收入科目' })
-    items.push(...income.map(a => ({ title: `${a.code} ${a.name}`, value: a.code })))
+  const used = new Set()
+  // 使用者自建的上層收入科目：依上層分群
+  const parents = list.filter(a => a.type === 'income' && !a.parentCode && leaves.every(l => l.code !== a.code))
+  for (const p of parents) {
+    const children = income.filter(a => a.parentCode === p.code)
+    if (!children.length) continue
+    items.push({ type: 'subheader', title: `${p.code} ${p.name}` })
+    for (const a of children) { items.push(acctItem(a)); used.add(a.code) }
+  }
+  // 平鋪收入科目：語意分群
+  for (const g of INCOME_GROUPS) {
+    const grp = income.filter(a => !used.has(a.code) && g.codes.includes(a.code))
+    if (!grp.length) continue
+    items.push({ type: 'subheader', title: g.title })
+    for (const a of grp) { items.push(acctItem(a)); used.add(a.code) }
+  }
+  const rest = income.filter(a => !used.has(a.code))
+  if (rest.length) {
+    items.push({ type: 'subheader', title: '其他收入類' })
+    items.push(...rest.map(a => acctItem(a)))
   }
   if (liab.length) {
     items.push({ type: 'divider' }, { type: 'subheader', title: '代收付科目（不計入收支餘絀）' })
-    items.push(...liab.map(a => ({ title: `${a.code} ${a.name}`, value: a.code })))
+    items.push(...liab.map(a => acctItem(a)))
   }
   return items
 }
@@ -183,15 +215,15 @@ export function expenseAccountOptions(accounts) {
     const children = leaves.filter(a => a.parentCode === p.code)
     if (children.length) {
       items.push({ type: 'subheader', title: `${p.code} ${p.name}` })
-      items.push(...children.map(a => ({ title: `${a.code} ${a.name}`, value: a.code })))
+      items.push(...children.map(a => acctItem(a)))
     } else if (leaves.some(a => a.code === p.code)) {
-      items.push({ title: `${p.code} ${p.name}`, value: p.code })
+      items.push(acctItem(p))
     }
   }
   const agency = leaves.find(a => a.code === CODES.AGENCY)
   if (agency) {
     items.push({ type: 'divider' }, { type: 'subheader', title: '代收付科目（不計入收支餘絀）' })
-    items.push({ title: `${agency.code} ${agency.name}（代收款付出/轉繳）`, value: agency.code })
+    items.push({ title: `${agency.code} ${agency.name}（代收款付出/轉繳）`, value: agency.code, ...(agency.description ? { props: { subtitle: agency.description } } : {}) })
   }
   return items
 }

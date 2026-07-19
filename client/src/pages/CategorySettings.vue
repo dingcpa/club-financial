@@ -40,6 +40,7 @@
                   <td class="text-caption">{{ a.code }}</td>
                   <td class="text-caption" :class="a.parentCode ? 'pl-8' : 'font-weight-medium'">
                     {{ a.name }}
+                    <div v-if="a.description" class="text-caption text-medium-emphasis" style="font-size:11px">{{ a.description }}</div>
                   </td>
                   <td>
                     <v-chip v-if="a.isSystem" size="x-small" variant="tonal" color="grey" class="mr-1">
@@ -200,6 +201,11 @@
               density="compact" variant="outlined" class="mb-2"
               :readonly="!!editingAcct && !!editingAcct.isSystem"
             />
+            <v-text-field
+              v-model="acctForm.description" label="科目說明（表單下拉的副標，幫執秘判斷用途）"
+              placeholder="例如：例會講師鐘點費、車馬費"
+              density="compact" variant="outlined" class="mb-2"
+            />
             <template v-if="!editingAcct || !editingAcct.isSystem">
               <v-checkbox v-model="acctForm.requiresPerson" label="分錄需指定對象（人員/案名明細）" density="compact" hide-details class="mb-1" />
               <v-checkbox v-if="editingAcct" v-model="acctForm.active" label="啟用" density="compact" hide-details class="mb-2" />
@@ -334,7 +340,7 @@ const editingAcct = ref(null)
 const acctForm = ref(makeAcctForm())
 
 function makeAcctForm() {
-  return { code: '', name: '', type: 'expense', parentCode: null, requiresPerson: false, active: true }
+  return { code: '', name: '', type: 'expense', parentCode: null, requiresPerson: false, active: true, description: '' }
 }
 
 const parentOptions = computed(() => {
@@ -345,7 +351,7 @@ const parentOptions = computed(() => {
 function openAcctModal(a) {
   editingAcct.value = a
   acctForm.value = a
-    ? { code: a.code, name: a.name, type: a.type, parentCode: a.parentCode, requiresPerson: !!a.requiresPerson, active: !!a.active }
+    ? { code: a.code, name: a.name, type: a.type, parentCode: a.parentCode, requiresPerson: !!a.requiresPerson, active: !!a.active, description: a.description || '' }
     : makeAcctForm()
   acctModal.value = true
 }
@@ -362,6 +368,7 @@ async function handleSaveAccount() {
         parentCode: acctForm.value.parentCode,
         requiresPerson: acctForm.value.requiresPerson,
         active: acctForm.value.active,
+        description: acctForm.value.description?.trim() || '',
       })
     } else {
       if (!acctForm.value.code?.trim()) {
@@ -374,6 +381,7 @@ async function handleSaveAccount() {
         type: acctForm.value.type,
         parentCode: acctForm.value.parentCode,
         requiresPerson: acctForm.value.requiresPerson,
+        description: acctForm.value.description?.trim() || '',
       })
     }
     acctModal.value = false

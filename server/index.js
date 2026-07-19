@@ -649,7 +649,7 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
 
         // 溢收款處理
         const extraRecords = [];
-        const baseTs = Date.now() + duesSettled.length + 100;
+        const baseTs = Date.now() + settled.length + 100;
         if ((parseFloat(prevOverpayment) || 0) > 0) {
             const rec = {
                 id: baseTs,
@@ -917,7 +917,7 @@ app.get('/api/accounts', async (req, res) => {
 
 app.post('/api/accounts', async (req, res) => {
     try {
-        const { code, name, type, parentCode, isCash, requiresPerson, sortOrder } = req.body;
+        const { code, name, type, parentCode, isCash, requiresPerson, sortOrder, description } = req.body;
         if (!code || !name || !type) return res.status(400).json({ error: '科目代碼、名稱、類型為必填' });
         if (!['asset', 'liability', 'equity', 'income', 'expense'].includes(type)) {
             return res.status(400).json({ error: '科目類型不正確' });
@@ -929,8 +929,8 @@ app.post('/api/accounts', async (req, res) => {
         }
         try {
             await pool.query(
-                'INSERT INTO accounts (code, name, type, parentCode, isCash, isSystem, requiresPerson, sortOrder) VALUES (?,?,?,?,?,0,?,?)',
-                [code, name, type, parentCode || null, isCash ? 1 : 0, requiresPerson ? 1 : 0, sortOrder || 999]
+                'INSERT INTO accounts (code, name, type, parentCode, isCash, isSystem, requiresPerson, sortOrder, description) VALUES (?,?,?,?,?,0,?,?,?)',
+                [code, name, type, parentCode || null, isCash ? 1 : 0, requiresPerson ? 1 : 0, sortOrder || 999, description || null]
             );
         } catch (e) {
             if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '科目代碼已存在' });
@@ -949,12 +949,13 @@ app.put('/api/accounts/:code', async (req, res) => {
         const [rows] = await pool.query('SELECT * FROM accounts WHERE code=?', [code]);
         if (!rows.length) return res.status(404).json({ error: 'Account not found' });
         const cur = rows[0];
-        const { name, parentCode, isCash, requiresPerson, sortOrder, active } = req.body;
-        // 系統科目：僅允許改名稱與排序（引擎依 code/type 推導分錄）
+        const { name, parentCode, isCash, requiresPerson, sortOrder, active, description } = req.body;
+        // 系統科目：僅允許改名稱、說明與排序（引擎依 code/type 推導分錄）
         const updated = {
             name:      name      !== undefined ? name : cur.name,
             sortOrder: sortOrder !== undefined ? sortOrder : cur.sortOrder,
         };
+        if (description !== undefined) updated.description = description || null;
         if (!cur.isSystem) {
             if (parentCode !== undefined)      updated.parentCode = parentCode || null;
             if (isCash !== undefined)          updated.isCash = isCash ? 1 : 0;
