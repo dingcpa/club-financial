@@ -445,7 +445,7 @@ function updateMemberAmount(name, amount) {
 
 function selectAllMembers() {
   const defaultAmt = parseFloat(formData.value.defaultAmount) || 0
-  formData.value.targetMembers = (members.value || []).map(m => ({ name: m.name, amount: defaultAmt }))
+  formData.value.targetMembers = (members.value || []).filter(m => m.status !== 'left').map(m => ({ name: m.name, amount: defaultAmt }))
 }
 
 function clearAllMembers() {

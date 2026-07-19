@@ -72,6 +72,7 @@ export function buildFundAccountOptions(members, accounts, extraHandlers = ['陳
     options.push({ title: `${name}（經手）`, value: handlerFundValue(name) })
   }
   for (const m of members || []) {
+    if (m && typeof m === 'object' && m.status === 'left') continue // 退社社友不再列為經手人
     const name = typeof m === 'string' ? m : m.name
     if (!name || seen.has(name)) continue
     seen.add(name)

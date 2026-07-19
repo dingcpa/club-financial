@@ -44,5 +44,16 @@ export function useMembers() {
     members.value = members.value.filter(m => m.id !== id)
   }
 
-  return { members, memLoading, fetchMembers, addMember, updateMember, deleteMember }
+  // Excel 批次匯入（以姓名 upsert），完成後重抓名冊
+  async function importMembers(rows) {
+    const res = await apiFetch(`${API_URL}/batch-import`, {
+      method: 'POST',
+      body: JSON.stringify(rows)
+    })
+    const result = await res.json()
+    await fetchMembers()
+    return result
+  }
+
+  return { members, memLoading, fetchMembers, addMember, updateMember, deleteMember, importMembers }
 }

@@ -96,25 +96,65 @@ app.get('/api/members', async (req, res) => {
     }
 });
 
+function buildMemberRow(body, id) {
+    const { name, nickname, birthday, email, phone, mobile, address, jobTitle1, jobTitle2, status, leaveDate, bankAccountLast5 } = body;
+    return {
+        id,
+        name: name || '',
+        nickname: nickname || '',
+        birthday: birthday || '',
+        email: email || '',
+        phone: phone || '',
+        mobile: mobile || '',
+        address: address || '',
+        jobTitle1: jobTitle1 || '',
+        jobTitle2: jobTitle2 || '',
+        status: status === 'left' ? 'left' : 'active',
+        leaveDate: leaveDate || null,
+        bankAccountLast5: bankAccountLast5 ? String(bankAccountLast5).trim() : null,
+    };
+}
+
 app.post('/api/members', async (req, res) => {
     try {
-        const { name, nickname, birthday, email, phone, mobile, address, jobTitle1, jobTitle2 } = req.body;
-        const newMember = {
-            id: Date.now(),
-            name: name || '',
-            nickname: nickname || '',
-            birthday: birthday || '',
-            email: email || '',
-            phone: phone || '',
-            mobile: mobile || '',
-            address: address || '',
-            jobTitle1: jobTitle1 || '',
-            jobTitle2: jobTitle2 || ''
-        };
+        const newMember = buildMemberRow(req.body, Date.now());
         await pool.query('INSERT INTO members SET ?', [newMember]);
         res.status(201).json(newMember);
     } catch (e) {
         res.status(500).json({ error: 'Failed to add member' });
+    }
+});
+
+// 名冊批次匯入（Excel 解析後的陣列；以姓名 upsert：同名更新、無則新增）
+app.post('/api/members/batch-import', async (req, res) => {
+    try {
+        const rows = req.body;
+        if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'Payload must be a non-empty array' });
+        const [existing] = await pool.query('SELECT id, name FROM members');
+        const byName = Object.fromEntries(existing.map(m => [m.name, m.id]));
+        let created = 0, updated = 0, skipped = 0;
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i];
+            const name = (r.name || '').trim();
+            if (!name) { skipped++; continue; }
+            // 只更新有提供的欄位，避免範本空欄清掉既有資料
+            const fields = {};
+            for (const k of ['nickname', 'birthday', 'email', 'phone', 'mobile', 'address', 'jobTitle1', 'jobTitle2', 'bankAccountLast5', 'status', 'leaveDate']) {
+                if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '') fields[k] = String(r[k]).trim();
+            }
+            if (fields.status) fields.status = fields.status === 'left' || fields.status === '退社' ? 'left' : 'active';
+            if (byName[name]) {
+                if (Object.keys(fields).length) await pool.query('UPDATE members SET ? WHERE id=?', [fields, byName[name]]);
+                updated++;
+            } else {
+                await pool.query('INSERT INTO members SET ?', [buildMemberRow({ ...fields, name }, Date.now() + i)]);
+                created++;
+            }
+        }
+        res.json({ created, updated, skipped });
+    } catch (e) {
+        console.error('Error in members batch-import:', e);
+        res.status(500).json({ error: 'Failed to import members' });
     }
 });
 

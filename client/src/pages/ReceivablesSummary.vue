@@ -11,6 +11,7 @@
           <span class="text-body-1 text-sm-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 應收帳款總覽</span>
         </div>
         <div class="d-flex flex-wrap ga-2 align-center">
+          <v-btn color="success" prepend-icon="mdi-bank-transfer-in" size="small" @click="openMatchModal">收款對帳</v-btn>
           <v-btn color="primary" prepend-icon="mdi-playlist-plus" size="small" @click="openBatchModal">批次產生帳款</v-btn>
           <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus" size="small" @click="openCreateModal">單筆新增</v-btn>
           <v-autocomplete
@@ -70,6 +71,20 @@
             </v-card>
           </v-col>
         </v-row>
+      </div>
+
+      <!-- 明細↔總帳勾稽 -->
+      <div class="px-3 px-sm-4 pb-2">
+        <v-chip
+          size="small" variant="tonal"
+          :color="arTieOut.matched ? 'success' : 'error'"
+          :prepend-icon="arTieOut.matched ? 'mdi-check-circle' : 'mdi-alert-circle'"
+        >
+          應收明細未收合計 {{ arTieOut.detailTotal.toLocaleString() }} {{ arTieOut.matched ? '＝' : '≠' }} 帳上應收帳款餘額 {{ arTieOut.ledgerTotal.toLocaleString() }}
+        </v-chip>
+        <div v-if="!arTieOut.matched" class="text-caption text-error mt-1">
+          差額 {{ (arTieOut.detailTotal - arTieOut.ledgerTotal).toLocaleString() }}：可能為基準日前歷史帳款（應於期初餘額表達）或分錄診斷異常，請至「帳簿查詢」檢查。
+        </div>
       </div>
 
       <!-- 月份區塊列表 -->
@@ -338,6 +353,90 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <!-- 收款對帳 Dialog -->
+    <v-dialog v-model="matchModal" :max-width="xs ? undefined : 640" :fullscreen="xs">
+      <v-card>
+        <v-card-title class="d-flex justify-space-between align-center pa-4">
+          <span class="text-h6 font-weight-bold">收款對帳</span>
+          <v-btn icon variant="text" @click="matchModal = false"><v-icon>mdi-close</v-icon></v-btn>
+        </v-card-title>
+        <v-card-text>
+          <div class="text-caption text-medium-emphasis mb-2">
+            輸入銀行明細的<strong>金額</strong>、<strong>帳號末碼</strong>或<strong>姓名</strong>，系統即時比對付款人與未收帳款；點候選人後勾選要沖帳的項目。
+          </div>
+          <v-row dense>
+            <v-col cols="4">
+              <v-text-field v-model="matchForm.amount" label="收到金額" type="number" density="compact" variant="outlined" hide-details />
+            </v-col>
+            <v-col cols="4">
+              <v-text-field v-model="matchForm.last5" label="帳戶末碼" density="compact" variant="outlined" hide-details placeholder="例：12345" />
+            </v-col>
+            <v-col cols="4">
+              <v-text-field v-model="matchForm.name" label="姓名 / 社名" density="compact" variant="outlined" hide-details />
+            </v-col>
+          </v-row>
+
+          <!-- 候選付款人 -->
+          <v-card variant="outlined" class="mt-3 pa-2" style="max-height:300px;overflow-y:auto">
+            <div v-if="!matchCandidates.length" class="text-caption text-medium-emphasis pa-3 text-center">
+              輸入條件後即時列出可能的付款人
+            </div>
+            <div
+              v-for="c in matchCandidates" :key="c.member.id"
+              class="pa-2 rounded mb-1"
+              :style="matchSelected === c.member.name ? 'background:#eef2ff;border:1px solid #6366f1' : 'background:#f8fafc;cursor:pointer'"
+              @click="selectMatchCandidate(c)"
+            >
+              <div class="d-flex justify-space-between align-center">
+                <div class="d-flex align-center ga-2">
+                  <span class="text-body-2 font-weight-bold">{{ c.member.name }}</span>
+                  <span v-if="c.member.nickname" class="text-caption text-medium-emphasis">{{ c.member.nickname }}</span>
+                  <v-chip v-for="r in c.reasons" :key="r" size="x-small" color="success" variant="tonal">{{ r }}</v-chip>
+                </div>
+                <span class="text-caption">未收 {{ c.outstanding.length }} 筆，合計 <b>{{ c.total.toLocaleString() }}</b></span>
+              </div>
+              <!-- 展開：勾選沖帳項目 -->
+              <div v-if="matchSelected === c.member.name" class="mt-2" @click.stop>
+                <div v-for="r in c.outstanding" :key="r.id" class="d-flex align-center ga-1">
+                  <v-checkbox-btn v-model="matchPicked" :value="r.id" density="compact" />
+                  <span class="text-caption flex-grow-1">{{ r.sourceRef }}（{{ r.dueDate || '未指定' }}）</span>
+                  <span class="text-caption font-weight-bold">{{ r.amount.toLocaleString() }}</span>
+                </div>
+                <div v-if="!c.outstanding.length" class="text-caption text-medium-emphasis">此社友無 pending 帳款（部分收款中的請至列表逐筆收款）</div>
+              </div>
+            </div>
+          </v-card>
+
+          <!-- 沖帳摘要 -->
+          <div v-if="matchSelected" class="d-flex justify-space-between align-center mt-2 text-caption">
+            <span>已勾 {{ matchPicked.length }} 筆，合計 <b>{{ matchPickedTotal.toLocaleString() }}</b></span>
+            <span v-if="parseFloat(matchForm.amount) > 0">
+              收到 {{ (parseFloat(matchForm.amount) || 0).toLocaleString() }}：
+              <span v-if="Math.abs(matchPickedTotal - (parseFloat(matchForm.amount) || 0)) < 0.5" class="text-success font-weight-bold">金額吻合</span>
+              <span v-else-if="matchPickedTotal < (parseFloat(matchForm.amount) || 0)" class="text-warning">溢收 {{ ((parseFloat(matchForm.amount) || 0) - matchPickedTotal).toLocaleString() }} 將掛暫收款</span>
+              <span v-else class="text-error">金額不足，超出部分不會沖帳</span>
+            </span>
+          </div>
+
+          <v-row dense class="mt-2">
+            <v-col cols="6">
+              <v-text-field v-model="matchForm.date" label="收款日期" type="date" density="compact" variant="outlined" hide-details />
+            </v-col>
+            <v-col cols="6">
+              <v-select v-model="matchForm.account" label="收款帳戶" :items="fundOptions" density="compact" variant="outlined" hide-details />
+            </v-col>
+            <v-col cols="12">
+              <v-text-field v-model="matchForm.remark" label="備註（選填）" density="compact" variant="outlined" hide-details />
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions class="px-4 pb-4">
+          <v-spacer />
+          <v-btn variant="text" @click="matchModal = false">取消</v-btn>
+          <v-btn color="success" variant="flat" :loading="saving" :disabled="!matchPicked.length" @click="handleMatchSettle">確認沖帳</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -347,6 +446,7 @@ import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
 import { buildFundAccountOptions, LEGACY_INCOME_ACCOUNT_MAP, CODES } from '../accounting/coa.js'
 import { fyOf, fyLabel, DUES_QUARTERS, duesQuarterPeriod } from '../accounting/fiscal.js'
+import { balancesAsOf } from '../accounting/ledger.js'
 
 const { xs } = useDisplay()
 
@@ -365,6 +465,8 @@ const createReceivable = inject('createReceivable')
 const updateReceivable = inject('updateReceivable')
 const deleteReceivable = inject('deleteReceivable')
 const collectReceivable = inject('collectReceivable')
+const settleBatch = inject('settleBatch')
+const accounting = inject('accounting')
 
 const selectedYear = ref(new Date().getFullYear().toString())
 const filterMember = ref(null)
@@ -382,7 +484,8 @@ const availableYears = computed(() => {
   return years.sort((a, b) => b - a)
 })
 
-const memberNames = computed(() => (members.value || []).map(m => m.name))
+// 開單/批次名單只列現職社友（退社社友的既有欠費仍可於列表追蹤收款）
+const memberNames = computed(() => (members.value || []).filter(m => m.status !== 'left').map(m => m.name))
 const memberOptions = computed(() => memberNames.value)
 const categoryOptions = computed(() => (duesSettings.value || []).map(s => s.category))
 const fundOptions = computed(() => buildFundAccountOptions(members?.value, accounts?.value))
@@ -657,6 +760,135 @@ async function handleCollect() {
     })
   } catch (e) {
     Swal.fire({ icon: 'error', title: '收款失敗', text: e.message, confirmButtonColor: '#ef4444' })
+  } finally {
+    saving.value = false
+  }
+}
+
+// ── 明細↔總帳勾稽（應收明細未收合計 vs 引擎 1111 餘額）──
+const arTieOut = computed(() => {
+  const detailTotal = (receivables.value || []).reduce((s, r) => s + remainingOf(r), 0)
+  const { byCode } = balancesAsOf(accounting.entries.value, {})
+  const b = byCode.get(CODES.RECEIVABLE) || { debit: 0, credit: 0 }
+  const ledgerTotal = Math.round((b.debit - b.credit) * 100) / 100
+  return {
+    detailTotal: Math.round(detailTotal * 100) / 100,
+    ledgerTotal,
+    matched: Math.round(detailTotal * 100) === Math.round(ledgerTotal * 100),
+  }
+})
+
+// ── 收款對帳（金額＋帳戶末碼＋姓名 → 比對付款人與未收帳款）──
+const matchModal = ref(false)
+const matchForm = ref({ amount: '', last5: '', name: '', date: todayStr(), account: '一銀帳戶', remark: '' })
+const matchSelected = ref(null) // 展開中的社友姓名
+const matchPicked = ref([])     // 勾選沖帳的 receivable id
+
+function openMatchModal() {
+  matchForm.value = { amount: '', last5: '', name: '', date: todayStr(), account: '一銀帳戶', remark: '' }
+  matchSelected.value = null
+  matchPicked.value = []
+  matchModal.value = true
+}
+
+// 只比對 pending 帳款（partial 請用列表的收款按鈕逐筆處理）
+function pendingOf(memberName) {
+  return (receivables.value || [])
+    .filter(r => r.memberName === memberName && r.status === 'pending')
+    .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+}
+
+const matchCandidates = computed(() => {
+  const amt = parseFloat(matchForm.value.amount) || 0
+  const last5 = (matchForm.value.last5 || '').trim()
+  const nameKw = (matchForm.value.name || '').trim()
+  if (!amt && !last5 && !nameKw) return []
+  const out = []
+  for (const m of members.value || []) {
+    const outstanding = pendingOf(m.name)
+    const total = Math.round(outstanding.reduce((s, r) => s + r.amount, 0) * 100) / 100
+    let score = 0
+    const reasons = []
+    if (last5 && m.bankAccountLast5 &&
+        (m.bankAccountLast5.endsWith(last5) || last5.endsWith(m.bankAccountLast5))) {
+      score += 3; reasons.push(`帳號末碼 ${m.bankAccountLast5}`)
+    }
+    if (nameKw && (m.name.includes(nameKw) || (m.nickname || '').toLowerCase().includes(nameKw.toLowerCase()))) {
+      score += 2; reasons.push('姓名相符')
+    }
+    if (amt && outstanding.length) {
+      if (outstanding.some(r => Math.abs(r.amount - amt) < 0.5)) { score += 2; reasons.push('單筆金額吻合') }
+      else if (Math.abs(total - amt) < 0.5) { score += 2; reasons.push('未收合計吻合') }
+      else {
+        let acc = 0
+        for (const r of outstanding) {
+          acc += r.amount
+          if (Math.abs(acc - amt) < 0.5) { score += 1; reasons.push('連續多筆合計吻合'); break }
+        }
+      }
+    }
+    if (!score) continue
+    out.push({ member: m, outstanding, total, score, reasons })
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, 10)
+})
+
+function selectMatchCandidate(c) {
+  matchSelected.value = c.member.name
+  const amt = parseFloat(matchForm.value.amount) || 0
+  // 預選：單筆金額剛好 → 選那筆；否則依到期序累加不超過收到金額
+  const exact = c.outstanding.find(r => Math.abs(r.amount - amt) < 0.5)
+  if (amt && exact) {
+    matchPicked.value = [exact.id]
+    return
+  }
+  const picked = []
+  let acc = 0
+  for (const r of c.outstanding) {
+    if (!amt || acc + r.amount <= amt + 0.5) { picked.push(r.id); acc += r.amount }
+  }
+  matchPicked.value = picked
+}
+
+const matchPickedTotal = computed(() => {
+  const ids = new Set(matchPicked.value)
+  return Math.round((receivables.value || [])
+    .filter(r => ids.has(r.id))
+    .reduce((s, r) => s + r.amount, 0) * 100) / 100
+})
+
+async function handleMatchSettle() {
+  const amt = parseFloat(matchForm.value.amount) || 0
+  if (!matchSelected.value || !matchPicked.value.length) {
+    Swal.fire({ icon: 'warning', title: '請選擇付款人並勾選要沖帳的帳款', confirmButtonColor: '#4f46e5' }); return
+  }
+  if (amt <= 0) {
+    Swal.fire({ icon: 'warning', title: '請輸入收到金額', confirmButtonColor: '#4f46e5' }); return
+  }
+  saving.value = true
+  try {
+    const remark = [matchForm.value.remark, matchForm.value.last5 ? `對帳末碼 ${matchForm.value.last5}` : '']
+      .filter(Boolean).join('；')
+    const result = await settleBatch({
+      memberName: matchSelected.value,
+      date: matchForm.value.date,
+      account: matchForm.value.account,
+      receivableIds: matchPicked.value,
+      receivedAmount: amt,
+      prevOverpayment: 0,
+      remark,
+    })
+    await Promise.all([fetchRecords(), fetchReceivables()])
+    matchModal.value = false
+    const surplusNote = result.surplus > 0 ? `，溢收 NT$ <b>${result.surplus.toLocaleString()}</b> 已掛暫收款` : ''
+    const skippedNote = result.skipped?.length ? `，${result.skipped.length} 筆金額不足未沖` : ''
+    Swal.fire({
+      icon: 'success', title: '對帳收款完成',
+      html: `已沖 <b>${result.settled.length}</b> 筆${surplusNote}${skippedNote}`,
+      confirmButtonColor: '#4f46e5',
+    })
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: '對帳收款失敗', text: e.message, confirmButtonColor: '#ef4444' })
   } finally {
     saving.value = false
   }
