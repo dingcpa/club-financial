@@ -422,10 +422,13 @@
               <div v-if="matchSelected === c.member.name" class="mt-2" @click.stop>
                 <div v-for="r in c.outstanding" :key="r.id" class="d-flex align-center ga-1">
                   <v-checkbox-btn v-model="matchPicked" :value="r.id" density="compact" />
-                  <span class="text-caption flex-grow-1">{{ r.sourceRef }}（{{ r.dueDate || '未指定' }}）</span>
-                  <span class="text-caption font-weight-bold">{{ r.amount.toLocaleString() }}</span>
+                  <span class="text-caption flex-grow-1">
+                    {{ r.sourceRef }}（{{ r.dueDate || '未指定' }}）
+                    <v-chip v-if="r.status === 'partial'" size="x-small" color="warning" variant="tonal">已收 {{ (r.paidAmount || 0).toLocaleString() }}</v-chip>
+                  </span>
+                  <span class="text-caption font-weight-bold">{{ remainingOf(r).toLocaleString() }}</span>
                 </div>
-                <div v-if="!c.outstanding.length" class="text-caption text-medium-emphasis">此社友無 pending 帳款（部分收款中的請至列表逐筆收款）</div>
+                <div v-if="!c.outstanding.length" class="text-caption text-medium-emphasis">此社友無未收帳款</div>
               </div>
             </div>
           </v-card>
@@ -437,7 +440,7 @@
               收到 {{ (parseFloat(matchForm.amount) || 0).toLocaleString() }}：
               <span v-if="Math.abs(matchPickedTotal - (parseFloat(matchForm.amount) || 0)) < 0.5" class="text-success font-weight-bold">金額吻合</span>
               <span v-else-if="matchPickedTotal < (parseFloat(matchForm.amount) || 0)" class="text-warning">溢收 {{ ((parseFloat(matchForm.amount) || 0) - matchPickedTotal).toLocaleString() }} 將掛暫收款</span>
-              <span v-else class="text-error">金額不足，超出部分不會沖帳</span>
+              <span v-else class="text-error">金額不足 {{ (matchPickedTotal - (parseFloat(matchForm.amount) || 0)).toLocaleString() }}，尾筆將列部分收款</span>
             </span>
           </div>
 
@@ -839,10 +842,10 @@ function openMatchModal() {
   matchModal.value = true
 }
 
-// 只比對 pending 帳款（partial 請用列表的收款按鈕逐筆處理）
+// 比對未收帳款（pending＋partial，partial 以剩餘額沖抵）
 function pendingOf(memberName) {
   return (receivables.value || [])
-    .filter(r => r.memberName === memberName && r.status === 'pending')
+    .filter(r => r.memberName === memberName && (r.status === 'pending' || r.status === 'partial'))
     .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
 }
 
@@ -854,7 +857,7 @@ const matchCandidates = computed(() => {
   const out = []
   for (const m of members.value || []) {
     const outstanding = pendingOf(m.name)
-    const total = Math.round(outstanding.reduce((s, r) => s + r.amount, 0) * 100) / 100
+    const total = Math.round(outstanding.reduce((s, r) => s + remainingOf(r), 0) * 100) / 100
     let score = 0
     const reasons = []
     if (last5 && m.bankAccountLast5 &&
@@ -865,12 +868,12 @@ const matchCandidates = computed(() => {
       score += 2; reasons.push('姓名相符')
     }
     if (amt && outstanding.length) {
-      if (outstanding.some(r => Math.abs(r.amount - amt) < 0.5)) { score += 2; reasons.push('單筆金額吻合') }
+      if (outstanding.some(r => Math.abs(remainingOf(r) - amt) < 0.5)) { score += 2; reasons.push('單筆金額吻合') }
       else if (Math.abs(total - amt) < 0.5) { score += 2; reasons.push('未收合計吻合') }
       else {
         let acc = 0
         for (const r of outstanding) {
-          acc += r.amount
+          acc += remainingOf(r)
           if (Math.abs(acc - amt) < 0.5) { score += 1; reasons.push('連續多筆合計吻合'); break }
         }
       }
@@ -885,7 +888,7 @@ function selectMatchCandidate(c) {
   matchSelected.value = c.member.name
   const amt = parseFloat(matchForm.value.amount) || 0
   // 預選：單筆金額剛好 → 選那筆；否則依到期序累加不超過收到金額
-  const exact = c.outstanding.find(r => Math.abs(r.amount - amt) < 0.5)
+  const exact = c.outstanding.find(r => Math.abs(remainingOf(r) - amt) < 0.5)
   if (amt && exact) {
     matchPicked.value = [exact.id]
     return
@@ -893,7 +896,7 @@ function selectMatchCandidate(c) {
   const picked = []
   let acc = 0
   for (const r of c.outstanding) {
-    if (!amt || acc + r.amount <= amt + 0.5) { picked.push(r.id); acc += r.amount }
+    if (!amt || acc + remainingOf(r) <= amt + 0.5) { picked.push(r.id); acc += remainingOf(r) }
   }
   matchPicked.value = picked
 }
@@ -902,7 +905,7 @@ const matchPickedTotal = computed(() => {
   const ids = new Set(matchPicked.value)
   return Math.round((receivables.value || [])
     .filter(r => ids.has(r.id))
-    .reduce((s, r) => s + r.amount, 0) * 100) / 100
+    .reduce((s, r) => s + remainingOf(r), 0) * 100) / 100
 })
 
 async function handleMatchSettle() {
@@ -929,10 +932,11 @@ async function handleMatchSettle() {
     await Promise.all([fetchRecords(), fetchReceivables()])
     matchModal.value = false
     const surplusNote = result.surplus > 0 ? `，溢收 NT$ <b>${result.surplus.toLocaleString()}</b> 已掛暫收款` : ''
-    const skippedNote = result.skipped?.length ? `，${result.skipped.length} 筆金額不足未沖` : ''
+    const partialNote = result.partialSettled?.length ? `，<b>${result.partialSettled.length}</b> 筆列部分收款` : ''
+    const skippedNote = result.skipped?.length ? `，${result.skipped.length} 筆未分配到款項未沖` : ''
     Swal.fire({
       icon: 'success', title: '對帳收款完成',
-      html: `已沖 <b>${result.settled.length}</b> 筆${surplusNote}${skippedNote}`,
+      html: `已沖 <b>${result.settled.length}</b> 筆${partialNote}${surplusNote}${skippedNote}`,
       confirmButtonColor: '#4f46e5',
     })
   } catch (e) {

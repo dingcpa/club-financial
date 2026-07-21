@@ -651,10 +651,13 @@ app.get('/api/receivables/outstanding/:memberName', async (req, res) => {
     try {
         const memberName = decodeURIComponent(req.params.memberName);
         const [rows] = await pool.query(
-            `SELECT * FROM receivables WHERE memberName=? AND status='pending' ORDER BY dueDate ASC`,
+            `SELECT * FROM receivables WHERE memberName=? AND status IN ('pending','partial') ORDER BY dueDate ASC`,
             [memberName]
         );
-        res.json(rows.map(parseReceivable));
+        res.json(rows.map(parseReceivable).map(r => ({
+            ...r,
+            remaining: r.amount - (r.paidAmount || 0),
+        })));
     } catch (e) {
         res.status(500).json({ error: 'Failed to read outstanding receivables' });
     }
@@ -669,35 +672,37 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
         }
         if (!await assertUnlocked(res, date)) return;
 
-        // 查出指定的 receivables
+        // 查出指定的 receivables（含 partial，以剩餘額沖抵；依前端傳入順序）
         const placeholders = receivableIds.map(() => '?').join(',');
         const [receivables] = await pool.query(
-            `SELECT * FROM receivables WHERE id IN (${placeholders}) AND status='pending'`,
-            receivableIds
+            `SELECT * FROM receivables WHERE id IN (${placeholders}) AND status IN ('pending','partial')
+             ORDER BY FIELD(id, ${placeholders})`,
+            [...receivableIds, ...receivableIds]
         );
 
-        // 依序沖抵（與前端 computeSettlement 邏輯一致）
+        // 依序沖抵：每筆沖至剩餘額為止，可分配額不足時尾筆列部分收款
         const total = (parseFloat(receivedAmount) || 0) + (parseFloat(prevOverpayment) || 0);
         let remaining = total;
         const settled = [];
+        const partialSettled = [];
         const skipped = [];
-        for (const r of receivables) {
-            const amt = parseFloat(r.amount);
-            if (remaining >= amt) {
-                settled.push(r);
-                remaining -= amt;
-            } else {
-                skipped.push(r);
-            }
-        }
-
         const financeRecords = [];
 
-        // 已沖項 → 一律產生 finance「收款單」（sourceReceivableId 標記，引擎推導為借資金/貸應收，
+        // 沖抵項 → 產生 finance「收款單」（sourceReceivableId 標記，引擎推導為借資金/貸應收，
         // 不認列收入——收入由開單/預收轉列認列，權責基礎）＋ 更新 receivable
-        for (let i = 0; i < settled.length; i++) {
-            const r = settled[i];
+        for (let i = 0; i < receivables.length; i++) {
+            const r = receivables[i];
             const amt = parseFloat(r.amount);
+            const alreadyPaid = parseFloat(r.paidAmount) || 0;
+            const rcvRemaining = amt - alreadyPaid;
+            const applied = Math.min(rcvRemaining, remaining);
+            if (applied <= 0) {
+                skipped.push(r);
+                continue;
+            }
+            remaining -= applied;
+            const newPaid = alreadyPaid + applied;
+            const fullyPaid = newPaid >= amt;
             const financeId = Date.now() + i;
             const record = {
                 id: financeId,
@@ -706,7 +711,7 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
                 item: r.sourceRef,
                 member: memberName,
                 account,
-                amount: amt,
+                amount: applied,
                 remark: remark || '',
                 startPeriod: null,
                 endPeriod: null,
@@ -717,17 +722,18 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
             };
             await pool.query('INSERT INTO finance SET ?', [record]);
             await pool.query(
-                `UPDATE receivables SET status='paid', paidAmount=?, paidDate=?, financeId=?, updatedAt=NOW() WHERE id=?`,
-                [amt, date, financeId, r.id]
+                `UPDATE receivables SET status=?, paidAmount=?, paidDate=?, financeId=?, updatedAt=NOW() WHERE id=?`,
+                [fullyPaid ? 'paid' : 'partial', newPaid, date, financeId, r.id]
             );
             financeRecords.push(record);
+            (fullyPaid ? settled : partialSettled).push({ ...r, paidAmount: newPaid, status: fullyPaid ? 'paid' : 'partial' });
             // 代收沖項同步更新 agency_collections paidMembers
             if (r.sourceType === 'agency') {
                 const agencyId = parseInt(r.sourceRef);
                 const [agRows] = await pool.query('SELECT * FROM agency_collections WHERE id=?', [agencyId]);
                 if (agRows.length > 0) {
                     const col = parseCollection(agRows[0]);
-                    col.paidMembers.push({ memberName, date, amount: amt });
+                    col.paidMembers.push({ memberName, date, amount: applied });
                     await pool.query('UPDATE agency_collections SET paidMembers=? WHERE id=?',
                         [JSON.stringify(col.paidMembers), agencyId]);
                 }
@@ -736,7 +742,7 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
 
         // 溢收款處理
         const extraRecords = [];
-        const baseTs = Date.now() + settled.length + 100;
+        const baseTs = Date.now() + receivables.length + 100;
         if ((parseFloat(prevOverpayment) || 0) > 0) {
             const rec = {
                 id: baseTs,
@@ -763,6 +769,7 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
 
         res.json({
             settled: settled.map(parseReceivable),
+            partialSettled: partialSettled.map(parseReceivable),
             skipped: skipped.map(parseReceivable),
             surplus: remaining,
             financeRecords: [...financeRecords, ...extraRecords].map(parseFinance),
