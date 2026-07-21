@@ -167,8 +167,8 @@ export function deriveAllEntries({
     const projectId = f.projectId || null
 
     if (f.type === 'transfer') {
-      const from = fundOf(f.fromAccount, `轉帳單 ${f.date}`)
-      const to = fundOf(f.toAccount, `轉帳單 ${f.date}`)
+      const from = fundOf(f.fromAccount, `調撥單 ${f.date}`)
+      const to = fundOf(f.toAccount, `調撥單 ${f.date}`)
       push({
         id: `fin-${f.id}`,
         date: f.date,
@@ -222,7 +222,7 @@ export function deriveAllEntries({
       }
       const incomeCode = code && code.startsWith('4') ? code : null
       if (!incomeCode) {
-        diagnostics.push({ level: 'warn', message: `收入單「${f.item}」（${f.date}）未設科目，暫列其他收入` })
+        diagnostics.push({ level: 'warn', message: `收款單「${f.item}」（${f.date}）未設科目，暫列其他收入` })
       }
       const useCode = incomeCode || '4104'
       // 預收性質：先掛其他預收收入，期間內逐月轉列
@@ -276,7 +276,7 @@ export function deriveAllEntries({
       }
       const expenseCode = code && code.startsWith('5') ? code : null
       if (!expenseCode) {
-        diagnostics.push({ level: 'warn', message: `支出單「${f.item}」（${f.date}）未設科目，暫列其他支出` })
+        diagnostics.push({ level: 'warn', message: `付款單「${f.item}」（${f.date}）未設科目，暫列其他支出` })
       }
       const useCode = expenseCode || '5900'
       // 預付性質：先掛預付費用，期間內逐月攤銷

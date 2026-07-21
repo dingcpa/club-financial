@@ -37,7 +37,7 @@
             <tr>
               <th class="text-caption">日期</th>
               <th class="text-caption">{{ type === 'transfer' ? '帳戶' : '項目' }}</th>
-              <th v-if="type !== 'transfer'" class="text-caption d-none d-sm-table-cell">科目 / 專案</th>
+              <th v-if="type !== 'transfer'" class="text-caption d-none d-sm-table-cell">科目 / 活動</th>
               <th v-if="type !== 'transfer'" class="text-caption">對象 / 帳戶</th>
               <th class="text-right text-caption">金額</th>
               <th class="text-caption d-none d-sm-table-cell">備註</th>
@@ -138,9 +138,9 @@ const dateTo = ref(null)
 const page = ref(1)
 
 const TYPE_CONFIG = {
-  income:   { label: '收入單', color: 'success', colorHex: '#10b981', bgColor: '#f0fdf4', borderColor: '#bbf7d0', sign: '+',  icon: 'mdi-trending-up' },
-  expense:  { label: '支出單', color: 'error',   colorHex: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca', sign: '-',  icon: 'mdi-trending-down' },
-  transfer: { label: '內部轉帳單', color: 'primary',  colorHex: '#4f46e5', bgColor: '#f0f4ff', borderColor: '#c7d2fe', sign: '⇄', icon: 'mdi-swap-horizontal' },
+  income:   { label: '收款單', color: 'success', colorHex: '#10b981', bgColor: '#f0fdf4', borderColor: '#bbf7d0', sign: '+',  icon: 'mdi-trending-up' },
+  expense:  { label: '付款單', color: 'error',   colorHex: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca', sign: '-',  icon: 'mdi-trending-down' },
+  transfer: { label: '調撥單', color: 'primary',  colorHex: '#4f46e5', bgColor: '#f0f4ff', borderColor: '#c7d2fe', sign: '⇄', icon: 'mdi-swap-horizontal' },
 }
 
 const type = computed(() => {

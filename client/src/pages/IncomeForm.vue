@@ -3,11 +3,12 @@
     <v-card-title class="d-flex justify-space-between align-center pa-3 pa-sm-4">
       <div class="d-flex align-center ga-2">
         <v-icon color="success">mdi-plus-circle</v-icon>
-        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯收入單' : '新增收入單' }}</span>
+        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯收款單' : '新增收款單' }}</span>
       </div>
       <v-btn v-if="editingRecord" icon variant="tonal" size="small" @click="handleCancelEdit">
         <v-icon>mdi-close</v-icon>
       </v-btn>
+      <v-btn v-else variant="tonal" size="small" prepend-icon="mdi-magnify" @click="setActiveTab('income-list')">歷史單據</v-btn>
     </v-card-title>
 
     <v-card-text class="pa-2 pa-sm-4">
@@ -33,7 +34,7 @@
               label="收款帳戶 / 經手人"
               :items="fundOptions"
               density="compact" variant="outlined" required
-              hint="選經手人＝款項在其手上（其他應收款），存入銀行時再開內部轉帳單"
+              hint="選經手人＝款項在其手上（其他應收款），存入銀行時再開調撥單"
             />
           </v-col>
         </v-row>
@@ -69,7 +70,7 @@
           <v-col cols="12" sm="6">
             <v-select
               v-model="formData.projectId"
-              label="專案類別（選填）"
+              label="活動（選填）"
               :items="projectOptions"
               density="compact" variant="outlined" clearable
               prepend-inner-icon="mdi-folder-star-outline"
@@ -141,6 +142,7 @@ const addRecord = inject('addRecord')
 const updateRecord = inject('updateRecord')
 const deleteRecord = inject('deleteRecord')
 const handleCancelEdit = inject('handleCancelEdit')
+const setActiveTab = inject('setActiveTab')
 
 const currentMonth = new Date().toISOString().substring(0, 7)
 

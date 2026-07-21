@@ -8,7 +8,7 @@
       <v-card-title class="d-flex flex-wrap justify-space-between align-center pa-3 pa-sm-4 ga-2">
         <div class="d-flex align-center ga-2">
           <v-icon color="primary">mdi-file-document-check</v-icon>
-          <span class="text-body-1 text-sm-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 應收帳款總覽</span>
+          <span class="text-body-1 text-sm-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 帳款明細表</span>
         </div>
         <div class="d-flex flex-wrap ga-2 align-center">
           <v-btn color="success" prepend-icon="mdi-bank-transfer-in" size="small" @click="openMatchModal">收款對帳</v-btn>

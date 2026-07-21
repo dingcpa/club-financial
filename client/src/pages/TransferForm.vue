@@ -3,11 +3,12 @@
     <v-card-title class="d-flex justify-space-between align-center pa-3 pa-sm-4">
       <div class="d-flex align-center ga-2">
         <v-icon color="primary">mdi-swap-horizontal</v-icon>
-        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯內部轉帳單' : '新增內部轉帳單' }}</span>
+        <span class="text-body-1 text-sm-h6 font-weight-bold">{{ editingRecord ? '編輯調撥單' : '新增調撥單' }}</span>
       </div>
       <v-btn v-if="editingRecord" icon variant="tonal" size="small" @click="handleCancelEdit">
         <v-icon>mdi-close</v-icon>
       </v-btn>
+      <v-btn v-else variant="tonal" size="small" prepend-icon="mdi-magnify" @click="setActiveTab('transfer-list')">歷史單據</v-btn>
     </v-card-title>
 
     <v-card-text class="pa-2 pa-sm-4">
@@ -16,7 +17,7 @@
       </v-alert>
 
       <v-form @submit.prevent="handleSubmit">
-        <v-text-field v-model="formData.date" label="轉帳日期" type="date" density="compact" variant="outlined" required class="mb-3" />
+        <v-text-field v-model="formData.date" label="調撥日期" type="date" density="compact" variant="outlined" required class="mb-3" />
 
         <v-row dense align="center" class="mb-3">
           <v-col cols="12" sm="5">
@@ -33,7 +34,7 @@
 
         <v-text-field
           v-model="formData.amount"
-          label="轉帳金額 (NT$)"
+          label="調撥金額 (NT$)"
           type="number"
           density="compact"
           variant="outlined"
@@ -78,6 +79,7 @@ const addRecord = inject('addRecord')
 const updateRecord = inject('updateRecord')
 const deleteRecord = inject('deleteRecord')
 const handleCancelEdit = inject('handleCancelEdit')
+const setActiveTab = inject('setActiveTab')
 
 const fundOptions = computed(() => buildFundAccountOptions(members?.value, accounts?.value))
 

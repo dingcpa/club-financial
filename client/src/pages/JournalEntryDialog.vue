@@ -14,7 +14,7 @@
           <thead>
             <tr>
               <th>科目</th>
-              <th>對象 / 專案</th>
+              <th>對象 / 活動</th>
               <th class="text-right">借方</th>
               <th class="text-right">貸方</th>
             </tr>
@@ -76,7 +76,7 @@ const setActiveTab = inject('setActiveTab')
 
 const SOURCE_LABELS = {
   opening: '期初餘額', receivable: '開立帳款', recognition: '預收/預付轉列',
-  collection: '收款', income: '收入單', expense: '支出單', transfer: '內部轉帳單',
+  collection: '收款沖帳', income: '收款單', expense: '付款單', transfer: '調撥單',
   overpayment: '溢收款', 'agency-payout': '代收款付出', manual: '手工傳票', closing: '年度結轉',
 }
 const sourceLabel = computed(() => SOURCE_LABELS[props.entry?.sourceType] || props.entry?.sourceType)

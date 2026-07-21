@@ -11,7 +11,7 @@
     <v-card-text class="pa-2 pa-sm-4 pt-0">
       <v-alert color="primary" variant="tonal" icon="mdi-information" density="compact" class="mb-3">
         <div class="text-caption">
-          供<strong>調整分錄</strong>使用（兌換損益、期末調整、更正分錄）。日常收支請用收入單/支出單/內部轉帳單。
+          供<strong>調整分錄</strong>使用（兌換損益、期末調整、更正分錄）。日常收支請用收款單/付款單/調撥單。
           借貸必須平衡才能儲存。
         </div>
       </v-alert>

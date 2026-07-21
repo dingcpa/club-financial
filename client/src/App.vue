@@ -47,61 +47,12 @@
       <v-divider />
 
       <v-list density="compact" nav>
-        <!-- 報表查詢 -->
-        <v-list-group value="reports">
+        <v-list-group v-for="group in visibleMenuGroups" :key="group.value" :value="group.value">
           <template #activator="{ props }">
-            <v-list-item v-bind="props" prepend-icon="mdi-chart-bar" title="報表查詢" />
+            <v-list-item v-bind="props" :prepend-icon="group.icon" :title="group.title" />
           </template>
           <v-list-item
-            v-for="item in reportItems"
-            :key="item.tab"
-            :prepend-icon="item.icon"
-            :title="item.title"
-            :active="activeTab === item.tab"
-            active-color="primary"
-            @click="navigate(item.tab)"
-          />
-        </v-list-group>
-
-        <!-- 社友管理 -->
-        <v-list-group v-if="!isViewer" value="members">
-          <template #activator="{ props }">
-            <v-list-item v-bind="props" prepend-icon="mdi-account-group" title="社友管理" />
-          </template>
-          <v-list-item
-            v-for="item in memberItems"
-            :key="item.tab"
-            :prepend-icon="item.icon"
-            :title="item.title"
-            :active="activeTab === item.tab"
-            active-color="primary"
-            @click="navigate(item.tab)"
-          />
-        </v-list-group>
-
-        <!-- 收支單據 -->
-        <v-list-group v-if="!isViewer" value="transactions">
-          <template #activator="{ props }">
-            <v-list-item v-bind="props" prepend-icon="mdi-file-document-outline" title="收支單據" />
-          </template>
-          <v-list-item
-            v-for="item in transactionItems"
-            :key="item.tab"
-            :prepend-icon="item.icon"
-            :title="item.title"
-            :active="activeTab === item.tab"
-            active-color="primary"
-            @click="navigate(item.tab)"
-          />
-        </v-list-group>
-
-        <!-- 系統管理（僅管理員可見） -->
-        <v-list-group v-if="isAdmin" value="admin">
-          <template #activator="{ props }">
-            <v-list-item v-bind="props" prepend-icon="mdi-cog" title="系統管理" />
-          </template>
-          <v-list-item
-            v-for="item in adminItems"
+            v-for="item in group.items"
             :key="item.tab"
             :prepend-icon="item.icon"
             :title="item.title"
@@ -209,35 +160,48 @@ const { attachmentsMeta, fetchAttachmentsMeta, getAttachmentData, deleteAttachme
 const accounting = useAccounting({ records, receivables, agencyCollections, manualJournals, openingBalances, accounts, appSettings })
 const drillContext = ref(null)
 
-// ----- 導覽選單定義 -----
+// ----- 導覽選單定義（七組） -----
+const docItems = [
+  { tab: 'income', icon: 'mdi-plus-circle', title: '新增收款單' },
+  { tab: 'expense', icon: 'mdi-minus-circle', title: '新增付款單' },
+  { tab: 'transfer', icon: 'mdi-swap-horizontal', title: '新增調撥單' },
+  { tab: 'journal-entry', icon: 'mdi-file-sign', title: '手工傳票' },
+]
 const reportItems = [
   { tab: 'summary', icon: 'mdi-chart-bar', title: '收支月報表' },
   { tab: 'budget', icon: 'mdi-chart-donut', title: '預算執行表' },
   { tab: 'balance-sheet', icon: 'mdi-scale-balance', title: '資產負債表' },
   { tab: 'cash-flow', icon: 'mdi-cash-fast', title: '現金流量表' },
-  { tab: 'ledger', icon: 'mdi-notebook-outline', title: '帳簿查詢' },
 ]
-const memberItems = [
+const bookItems = [
   { tab: 'dues', icon: 'mdi-format-list-bulleted', title: '社友繳費總覽' },
-  { tab: 'receivables', icon: 'mdi-file-document-check', title: '應收帳款' },
-  { tab: 'members', icon: 'mdi-account-multiple', title: '社友名冊' },
-  { tab: 'agency', icon: 'mdi-hand-coin', title: '代收代付' },
-  { tab: 'categories', icon: 'mdi-tag-multiple', title: '科目與類別設定' },
+  { tab: 'receivables', icon: 'mdi-file-document-check', title: '帳款明細表' },
+  { tab: 'agency', icon: 'mdi-hand-coin', title: '代收付明細表' },
+  { tab: 'ledger', icon: 'mdi-notebook-outline', title: '分類帳' },
+  { tab: 'journal', icon: 'mdi-notebook-edit-outline', title: '日記帳' },
 ]
-const transactionItems = [
-  { tab: 'income', icon: 'mdi-plus-circle', title: '新增收入單' },
-  { tab: 'income-list', icon: 'mdi-magnify', title: '查詢收入單' },
-  { tab: 'expense', icon: 'mdi-minus-circle', title: '新增支出單' },
-  { tab: 'expense-list', icon: 'mdi-magnify', title: '查詢支出單' },
-  { tab: 'transfer', icon: 'mdi-swap-horizontal', title: '新增內部轉帳單' },
-  { tab: 'transfer-list', icon: 'mdi-magnify', title: '查詢轉帳單' },
-  { tab: 'journal-entry', icon: 'mdi-file-sign', title: '手工傳票' },
+const mgmtItems = [
+]
+const activityItems = [
+]
+const settingItems = [
+  { tab: 'members', icon: 'mdi-account-multiple', title: '社友名冊' },
+  { tab: 'categories', icon: 'mdi-tag-multiple', title: '科目與類別設定' },
+  { tab: 'opening-balance', icon: 'mdi-scale-balance', title: '期初餘額設定', adminOnly: true },
+  { tab: 'closing', icon: 'mdi-lock-check', title: '年度關帳', adminOnly: true },
 ]
 const adminItems = [
-  { tab: 'opening-balance', icon: 'mdi-scale-balance', title: '期初餘額設定' },
-  { tab: 'closing', icon: 'mdi-lock-check', title: '年度關帳' },
   { tab: 'user-management', icon: 'mdi-account-key', title: '帳號管理' },
 ]
+const visibleMenuGroups = computed(() => [
+  { value: 'transactions', icon: 'mdi-file-document-outline', title: '收支單據', items: docItems, show: !isViewer.value },
+  { value: 'reports', icon: 'mdi-chart-bar', title: '報表查詢', items: reportItems, show: true },
+  { value: 'books', icon: 'mdi-notebook-multiple', title: '帳冊查詢', items: bookItems, show: !isViewer.value },
+  { value: 'mgmt', icon: 'mdi-cash-register', title: '帳務管理', items: mgmtItems, show: !isViewer.value },
+  { value: 'activities', icon: 'mdi-calendar-star', title: '活動管理', items: activityItems, show: !isViewer.value },
+  { value: 'settings', icon: 'mdi-cog', title: '基本設定', items: settingItems.filter(i => !i.adminOnly || isAdmin.value), show: !isViewer.value },
+  { value: 'admin', icon: 'mdi-shield-account', title: '系統管理', items: adminItems, show: isAdmin.value },
+].filter(g => g.show && g.items.length > 0))
 
 // ----- 頁面對應 -----
 const pageMap = {
@@ -257,6 +221,7 @@ const pageMap = {
   'transfer': TransferForm,
   'transfer-list': RecordListPanel,
   'ledger': LedgerBrowser,
+  'journal': LedgerBrowser,
   'journal-entry': ManualJournal,
   'opening-balance': OpeningBalance,
   'closing': ClosingWizard,
@@ -266,7 +231,7 @@ const currentPage = computed(() => pageMap[activeTab.value] || Summary)
 
 // 需要管理員的頁面清單；唯讀分享僅可看報表
 const ADMIN_TABS = ['user-management', 'opening-balance', 'closing']
-const VIEWER_TABS = ['summary', 'budget', 'balance-sheet', 'cash-flow', 'ledger']
+const VIEWER_TABS = ['summary', 'budget', 'balance-sheet', 'cash-flow', 'ledger', 'journal']
 
 // ----- 導覽 -----
 function navigate(tab) {

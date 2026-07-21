@@ -177,8 +177,14 @@ import { fyOf, fyRange, fyLabel, fyMonths, monthEnd, toMinguoDate } from '../acc
 const accounting = inject('accounting')
 const members = inject('members')
 const drillContext = inject('drillContext')
+const activeTab = inject('activeTab', ref(''))
 
-const tab = ref('ledger')
+// 選單「分類帳」「日記帳」共用本元件，依 activeTab 決定初始/切換的 tab
+const tab = ref(activeTab?.value === 'journal' ? 'journal' : 'ledger')
+watch(() => activeTab?.value, (t) => {
+  if (t === 'journal') tab.value = 'journal'
+  else if (t === 'ledger') tab.value = 'ledger'
+})
 const viewEntry = ref(null)
 const showDiag = ref(false)
 const journalPage = ref(1)

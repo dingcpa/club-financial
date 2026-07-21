@@ -292,7 +292,7 @@
           variant="outlined"
           density="compact"
           class="mb-2"
-          hint="結案將產生一筆代收款付出的支出單"
+          hint="結案將產生一筆代收款付出的付款單"
           persistent-hint
         />
         <v-text-field
