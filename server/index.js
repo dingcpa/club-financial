@@ -904,9 +904,11 @@ app.post('/api/receivables/:id/collect', async (req, res) => {
         const total     = parseFloat(r.amount) || 0;
         const already   = parseFloat(r.paidAmount) || 0;
         const remaining = total - already;
+        // 負數帳款（補助抵減）：一律以剩餘負額整筆沖抵
         const entered   = parseFloat(amount);
-        const applied   = (!entered || entered <= 0) ? remaining : Math.min(entered, remaining);
-        if (applied <= 0) return res.status(400).json({ error: '無可沖抵金額' });
+        const applied   = remaining < 0 ? remaining
+            : ((!entered || entered <= 0) ? remaining : Math.min(entered, remaining));
+        if (!applied) return res.status(400).json({ error: '無可沖抵金額' });
 
         // 一律產生 finance「收款單」（sourceReceivableId：引擎推導為借資金/貸應收，
         // 收入認列由開單/預收轉列處理，權責基礎；代收現金流也完整入帳）

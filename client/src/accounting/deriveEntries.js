@@ -112,25 +112,27 @@ export function deriveAllEntries({
     const amount = r.amount || 0
 
     // 開單分錄（基準日後開的單才入帳；之前的在期初 1111/2121 餘額中）
+    // 對象（person）一律帶在分錄行上：社友名或代收案名，供分類帳/日記帳對象欄與篩選
+    // 負數帳款（如補助抵減）由 pair() 自動轉正向：借費用科目／貸應收帳款-社友
     if (afterBase(billDate)) {
-      let creditLine
+      let creditCode, creditPerson
       if (isAgency || code === CODES.AGENCY) {
-        creditLine = line(CODES.AGENCY, { credit: amount, person: agencyTitle })
+        creditCode = CODES.AGENCY; creditPerson = agencyTitle
       } else if (r.periodStart && r.periodEnd && code && code.startsWith('4')) {
-        creditLine = line(CODES.UNEARNED_DUES, { credit: amount })
+        creditCode = CODES.UNEARNED_DUES; creditPerson = r.memberName
       } else if (code) {
-        creditLine = line(code, { credit: amount })
+        creditCode = code; creditPerson = r.memberName
       } else {
         diagnostics.push({ level: 'warn', message: `應收帳款「${r.sourceRef}/${r.memberName}」未設科目，暫以其他收入認列` })
-        creditLine = line('4104', { credit: amount })
+        creditCode = '4104'; creditPerson = r.memberName
       }
       push({
         id: `rcv-${r.id}`,
         date: billDate,
         sourceType: 'receivable',
         sourceId: r.id,
-        description: `開立帳款：${r.sourceRef}（${r.memberName}）`,
-        lines: [line(CODES.RECEIVABLE, { debit: amount, person: r.memberName }), creditLine],
+        description: `${amount < 0 ? '沖減應收' : '開立帳款'}：${r.sourceRef}`,
+        lines: pair(CODES.RECEIVABLE, creditCode, amount, { debitPerson: r.memberName, creditPerson }),
       })
     }
 
@@ -145,8 +147,8 @@ export function deriveAllEntries({
           date: d,
           sourceType: 'recognition',
           sourceId: r.id,
-          description: `預收轉列：${r.sourceRef}（${r.memberName}）${month}`,
-          lines: pair(CODES.UNEARNED_DUES, code, m),
+          description: `預收轉列：${r.sourceRef} ${month}`,
+          lines: pair(CODES.UNEARNED_DUES, code, m, { debitPerson: r.memberName, creditPerson: r.memberName }),
         })
       }
     }
@@ -182,14 +184,14 @@ export function deriveAllEntries({
     const code = resolveRecordAccount(f)
 
     if (f.type === 'income') {
-      // 收款單：沖應收（不認列收入）
+      // 收款單：沖應收（不認列收入）；負數＝抵減額沖抵（如補助自本次繳費扣抵）
       if (f.sourceReceivableId) {
         push({
           id: `fin-${f.id}`,
           date: f.date,
           sourceType: 'collection',
           sourceId: f.id,
-          description: `收款：${f.item}（${f.member || ''}）`,
+          description: `${amount < 0 ? '收款沖抵' : '收款'}：${f.item}`,
           lines: pair(fund.code, CODES.RECEIVABLE, amount, { debitPerson: fund.person, creditPerson: f.member || '' }),
         })
         continue
@@ -201,7 +203,7 @@ export function deriveAllEntries({
           date: f.date,
           sourceType: 'overpayment',
           sourceId: f.id,
-          description: `${f.item}（${f.member || ''}）`,
+          description: f.item,
           lines: pair(fund.code, CODES.TEMP_RECEIPT, amount, { debitPerson: fund.person, creditPerson: f.member || '' }),
         })
         continue
@@ -213,7 +215,7 @@ export function deriveAllEntries({
           date: f.date,
           sourceType: 'income',
           sourceId: f.id,
-          description: `代收：${f.item}（${f.member || ''}）`,
+          description: `代收：${f.item}`,
           lines: pair(fund.code, CODES.AGENCY, amount, { debitPerson: fund.person, creditPerson: f.item }),
         })
         continue
@@ -230,8 +232,8 @@ export function deriveAllEntries({
           date: effDate,
           sourceType: 'income',
           sourceId: f.id,
-          description: `預收收入：${f.item}（${f.member || ''}）`,
-          lines: pair(fund.code, CODES.UNEARNED_OTHER, amount, { debitPerson: fund.person, projectId }),
+          description: `預收收入：${f.item}`,
+          lines: pair(fund.code, CODES.UNEARNED_OTHER, amount, { debitPerson: fund.person, creditPerson: f.member || '', projectId }),
         })
         const months = monthsBetween(f.startPeriod, f.endPeriod)
         for (const { month, amount: m } of splitMonthly(amount, months)) {
@@ -243,7 +245,7 @@ export function deriveAllEntries({
             sourceType: 'recognition',
             sourceId: f.id,
             description: `預收轉列：${f.item} ${month}`,
-            lines: pair(CODES.UNEARNED_OTHER, useCode, m, { projectId }),
+            lines: pair(CODES.UNEARNED_OTHER, useCode, m, { debitPerson: f.member || '', creditPerson: f.member || '', projectId }),
           })
         }
       } else {
@@ -252,8 +254,8 @@ export function deriveAllEntries({
           date: effDate,
           sourceType: 'income',
           sourceId: f.id,
-          description: `收入：${f.item}（${f.member || ''}）`,
-          lines: pair(fund.code, useCode, amount, { debitPerson: fund.person, projectId }),
+          description: `收入：${f.item}`,
+          lines: pair(fund.code, useCode, amount, { debitPerson: fund.person, creditPerson: f.member || '', projectId }),
         })
       }
       continue
@@ -285,7 +287,7 @@ export function deriveAllEntries({
           sourceType: 'expense',
           sourceId: f.id,
           description: `預付費用：${f.item}`,
-          lines: pair(CODES.PREPAID_EXPENSE, fund.code, amount, { creditPerson: fund.person, projectId }),
+          lines: pair(CODES.PREPAID_EXPENSE, fund.code, amount, { debitPerson: f.member || '', creditPerson: fund.person, projectId }),
         })
         const months = monthsBetween(f.startPeriod, f.endPeriod)
         for (const { month, amount: m } of splitMonthly(amount, months)) {
@@ -297,7 +299,7 @@ export function deriveAllEntries({
             sourceType: 'recognition',
             sourceId: f.id,
             description: `預付攤銷：${f.item} ${month}`,
-            lines: pair(useCode, CODES.PREPAID_EXPENSE, m, { projectId }),
+            lines: pair(useCode, CODES.PREPAID_EXPENSE, m, { debitPerson: f.member || '', creditPerson: f.member || '', projectId }),
           })
         }
       } else {
@@ -307,7 +309,7 @@ export function deriveAllEntries({
           sourceType: 'expense',
           sourceId: f.id,
           description: `支出：${f.item}`,
-          lines: pair(useCode, fund.code, amount, { creditPerson: fund.person, projectId }),
+          lines: pair(useCode, fund.code, amount, { debitPerson: f.member || '', creditPerson: fund.person, projectId }),
         })
       }
       continue

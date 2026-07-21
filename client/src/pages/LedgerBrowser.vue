@@ -93,6 +93,7 @@
                   <th style="width:90px">日期</th>
                   <th style="width:110px">類型</th>
                   <th>摘要</th>
+                  <th style="width:150px">對象</th>
                   <th class="text-right" style="width:120px">金額</th>
                 </tr>
               </thead>
@@ -101,10 +102,11 @@
                   <td class="text-caption text-medium-emphasis" style="white-space:nowrap">{{ toMinguoDate(e.date) }}</td>
                   <td><v-chip size="x-small" variant="tonal" :color="sourceColor(e.sourceType)">{{ sourceLabel(e.sourceType) }}</v-chip></td>
                   <td class="text-caption">{{ e.description }}</td>
+                  <td class="text-caption text-medium-emphasis">{{ entryPersons(e) }}</td>
                   <td class="text-right text-caption font-weight-medium">{{ entryAmount(e).toLocaleString() }}</td>
                 </tr>
                 <tr v-if="!journalFiltered.length">
-                  <td colspan="4" class="text-center text-medium-emphasis pa-6">本期間無分錄</td>
+                  <td colspan="5" class="text-center text-medium-emphasis pa-6">本期間無分錄</td>
                 </tr>
               </tbody>
             </v-table>
@@ -262,6 +264,11 @@ const trial = computed(() => trialBalance(entries.value, acctByCode.value, { asO
 
 function entryAmount(e) {
   return e.lines.reduce((s, l) => s + (l.debit || 0), 0)
+}
+
+// 傳票層級的對象：彙整各分錄行的人員/案名（去重）
+function entryPersons(e) {
+  return [...new Set(e.lines.map(l => l.person).filter(Boolean))].join('、')
 }
 
 const SOURCE_LABELS = {

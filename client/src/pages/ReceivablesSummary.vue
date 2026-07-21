@@ -15,22 +15,6 @@
           <v-btn color="warning" prepend-icon="mdi-bell-ring-outline" size="small" @click="openReminderModal">催繳通知</v-btn>
           <v-btn color="primary" prepend-icon="mdi-playlist-plus" size="small" @click="openBatchModal">批次產生帳款</v-btn>
           <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus" size="small" @click="openCreateModal">單筆新增</v-btn>
-          <v-autocomplete
-            v-model="filterMember"
-            label="篩選社友"
-            :items="memberOptions"
-            density="compact"
-            variant="outlined"
-            hide-details
-            clearable
-            style="min-width:140px;max-width:200px"
-          />
-          <v-btn-toggle v-model="filterStatus" density="compact" variant="outlined" divided>
-            <v-btn value="all" size="small">全部</v-btn>
-            <v-btn value="unpaid" size="small" color="error">未收</v-btn>
-            <v-btn value="paid" size="small" color="success">已收</v-btn>
-            <v-btn value="waived" size="small" color="grey">免繳</v-btn>
-          </v-btn-toggle>
           <v-select
             v-model="selectedYear"
             :items="availableYears"
@@ -88,110 +72,119 @@
         </div>
       </div>
 
-      <!-- 月份區塊列表 -->
+      <!-- 逐欄篩選列 -->
+      <div class="px-3 px-sm-4 pb-2">
+        <v-row dense>
+          <v-col cols="6" sm="2">
+            <v-select v-model="filterPeriod" label="帳期" :items="periodOptions" density="compact" variant="outlined" hide-details clearable />
+          </v-col>
+          <v-col cols="6" sm="2">
+            <v-select v-model="filterNature" label="性質" :items="natureOptions" density="compact" variant="outlined" hide-details clearable />
+          </v-col>
+          <v-col cols="6" sm="3">
+            <v-select v-model="filterItem" label="項目" :items="itemOptions" density="compact" variant="outlined" hide-details clearable />
+          </v-col>
+          <v-col cols="6" sm="2">
+            <v-autocomplete v-model="filterMember" label="對象" :items="targetOptions" density="compact" variant="outlined" hide-details clearable />
+          </v-col>
+          <v-col cols="12" sm="3" class="d-flex align-center">
+            <v-btn-toggle v-model="filterStatus" density="compact" variant="outlined" divided>
+              <v-btn value="all" size="small">全部</v-btn>
+              <v-btn value="unpaid" size="small" color="error">未收</v-btn>
+              <v-btn value="paid" size="small" color="success">已收</v-btn>
+              <v-btn value="waived" size="small" color="grey">免繳</v-btn>
+            </v-btn-toggle>
+          </v-col>
+        </v-row>
+      </div>
+
+      <!-- 應收明細平表 -->
       <div class="pa-3 pa-sm-4 pt-0">
-        <div v-if="monthlyData.length === 0" class="text-center text-medium-emphasis pa-8">
-          {{ filterMember ? '該社友無應收帳款' : '本年度無應收帳款' }}
+        <div v-if="tableRows.length === 0" class="text-center text-medium-emphasis pa-8">
+          無符合條件的應收帳款
         </div>
-
-        <div v-for="month in monthlyData" :key="month.key" class="mb-4">
-          <!-- 月份標題 -->
-          <div
-            class="d-flex justify-space-between align-center pa-2 rounded mb-2"
-            style="background:#f1f5f9;cursor:pointer"
-            @click="toggleMonth(month.key)"
-          >
-            <div class="d-flex align-center ga-2">
-              <v-icon size="20" color="primary">mdi-calendar-month</v-icon>
-              <span class="text-body-2 font-weight-bold">{{ month.label }}</span>
-              <v-chip size="x-small" color="primary" variant="tonal">{{ month.items.length }} 項</v-chip>
-            </div>
-            <div class="d-flex align-center ga-3">
-              <div class="text-right">
-                <span class="text-caption text-success font-weight-bold">{{ month.paidAmount.toLocaleString() }}</span>
-                <span class="text-caption text-medium-emphasis"> / {{ month.targetAmount.toLocaleString() }}</span>
-              </div>
-              <v-icon size="20">{{ expandedMonths.includes(month.key) ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-            </div>
-          </div>
-
-          <!-- 月份明細 -->
-          <div v-if="expandedMonths.includes(month.key)">
-            <!-- 按項目分組 -->
-            <div v-for="group in month.groups" :key="group.title" class="mb-3">
-              <div class="d-flex align-center ga-2 mb-2 px-1">
-                <v-chip size="x-small" :color="group.sourceType === 'agency' ? 'warning' : 'primary'" variant="flat">
-                  {{ group.sourceType === 'agency' ? '代收' : '社費' }}
-                </v-chip>
-                <span class="text-caption font-weight-bold">{{ group.title }}</span>
-                <span class="text-caption text-medium-emphasis">
-                  (應收 NT$ {{ group.perAmount.toLocaleString() }}{{ group.sourceType === 'dues' ? ' / 人' : '' }})
-                </span>
-              </div>
-
-              <!-- 社友明細表 -->
-              <v-table density="compact" class="rounded" style="border:1px solid #e2e8f0">
-                <thead>
-                  <tr>
-                    <th style="width:110px">社友</th>
-                    <th class="text-right" style="width:90px">應收</th>
-                    <th class="text-right" style="width:90px">已收</th>
-                    <th class="text-right" style="width:90px">未收</th>
-                    <th class="text-center" style="width:64px">狀態</th>
-                    <th class="text-center" style="width:160px">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="item in group.members" :key="item.id" :class="item.status === 'waived' ? 'text-grey' : ''">
-                    <td class="text-caption font-weight-medium">{{ item.memberName }}</td>
-                    <td class="text-right text-caption">{{ item.amount.toLocaleString() }}</td>
-                    <td class="text-right text-caption" :class="paidOf(item) > 0 ? 'text-success font-weight-bold' : 'text-medium-emphasis'">
-                      {{ paidOf(item) > 0 ? paidOf(item).toLocaleString() : '—' }}
-                    </td>
-                    <td class="text-right text-caption" :class="remainingOf(item) > 0 ? 'text-error font-weight-bold' : 'text-medium-emphasis'">
-                      {{ item.status === 'waived' ? '—' : remainingOf(item).toLocaleString() }}
-                    </td>
-                    <td class="text-center">
-                      <v-icon v-if="item.status === 'paid'" size="16" color="success" title="已收">mdi-check-circle</v-icon>
-                      <v-icon v-else-if="item.status === 'partial'" size="16" color="warning" title="部分收款">mdi-circle-half-full</v-icon>
-                      <v-icon v-else-if="item.status === 'waived'" size="16" color="grey" title="免繳">mdi-cancel</v-icon>
-                      <v-icon v-else size="16" color="grey-lighten-1" title="未收">mdi-clock-outline</v-icon>
-                    </td>
-                    <td class="text-center">
-                      <div class="d-flex justify-center ga-1">
-                        <v-btn
-                          v-if="item.status === 'pending' || item.status === 'partial'"
-                          size="x-small" variant="tonal" color="success"
-                          prepend-icon="mdi-cash-plus"
-                          @click.stop="openCollectModal(item)"
-                        >收款</v-btn>
-                        <v-btn
-                          v-if="paidOf(item) === 0 && item.status !== 'waived'"
-                          size="x-small" variant="text" icon="mdi-pencil" color="primary"
-                          title="編輯" @click.stop="openEditModal(item)"
-                        />
-                        <v-btn
-                          v-if="item.status === 'pending'"
-                          size="x-small" variant="text" icon="mdi-cancel" color="grey"
-                          title="免繳" @click.stop="handleWaive(item)"
-                        />
-                        <v-btn
-                          v-if="item.status === 'waived' || item.status === 'paid' || item.status === 'partial'"
-                          size="x-small" variant="text" icon="mdi-restore" color="primary"
-                          title="恢復為未收" @click.stop="handleReopen(item)"
-                        />
-                        <v-btn
-                          v-if="paidOf(item) === 0"
-                          size="x-small" variant="text" icon="mdi-delete" color="error"
-                          title="刪除" @click.stop="handleDelete(item)"
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </v-table>
-            </div>
-          </div>
+        <div v-else style="overflow-x:auto">
+          <v-table density="compact" class="rounded" style="border:1px solid #e2e8f0;min-width:860px">
+            <thead>
+              <tr>
+                <th style="width:70px">帳期</th>
+                <th style="width:70px">性質</th>
+                <th>項目</th>
+                <th style="width:110px">對象</th>
+                <th class="text-right" style="width:90px">應收</th>
+                <th class="text-right" style="width:90px">已收</th>
+                <th class="text-right" style="width:90px">未收</th>
+                <th class="text-center" style="width:56px">狀態</th>
+                <th class="text-center" style="width:160px">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in pagedRows" :key="item.id" :class="item.status === 'waived' ? 'text-grey' : ''">
+                <td class="text-caption text-medium-emphasis">{{ periodOf(item) }}</td>
+                <td>
+                  <v-chip size="x-small" variant="tonal" :color="natureColor(natureOf(item))">{{ natureOf(item) }}</v-chip>
+                </td>
+                <td class="text-caption">{{ item.sourceRef }}</td>
+                <td class="text-caption font-weight-medium">{{ item.memberName }}</td>
+                <td class="text-right text-caption">{{ item.amount.toLocaleString() }}</td>
+                <td class="text-right text-caption" :class="paidOf(item) !== 0 ? 'text-success font-weight-bold' : 'text-medium-emphasis'">
+                  {{ paidOf(item) !== 0 ? paidOf(item).toLocaleString() : '—' }}
+                </td>
+                <td class="text-right text-caption" :class="remainingOf(item) !== 0 ? 'text-error font-weight-bold' : 'text-medium-emphasis'">
+                  {{ item.status === 'waived' ? '—' : remainingOf(item).toLocaleString() }}
+                </td>
+                <td class="text-center">
+                  <v-icon v-if="item.status === 'paid'" size="16" color="success" title="已收">mdi-check-circle</v-icon>
+                  <v-icon v-else-if="item.status === 'partial'" size="16" color="warning" title="部分收款">mdi-circle-half-full</v-icon>
+                  <v-icon v-else-if="item.status === 'waived'" size="16" color="grey" title="免繳">mdi-cancel</v-icon>
+                  <v-icon v-else size="16" color="grey-lighten-1" title="未收">mdi-clock-outline</v-icon>
+                </td>
+                <td class="text-center">
+                  <div class="d-flex justify-center ga-1">
+                    <v-btn
+                      v-if="item.status === 'pending' || item.status === 'partial'"
+                      size="x-small" variant="tonal" color="success"
+                      prepend-icon="mdi-cash-plus"
+                      @click.stop="openCollectModal(item)"
+                    >收款</v-btn>
+                    <v-btn
+                      v-if="paidOf(item) === 0 && item.status !== 'waived'"
+                      size="x-small" variant="text" icon="mdi-pencil" color="primary"
+                      title="編輯" @click.stop="openEditModal(item)"
+                    />
+                    <v-btn
+                      v-if="item.status === 'pending'"
+                      size="x-small" variant="text" icon="mdi-cancel" color="grey"
+                      title="免繳" @click.stop="handleWaive(item)"
+                    />
+                    <v-btn
+                      v-if="item.status === 'waived' || item.status === 'paid' || item.status === 'partial'"
+                      size="x-small" variant="text" icon="mdi-restore" color="primary"
+                      title="恢復為未收" @click.stop="handleReopen(item)"
+                    />
+                    <v-btn
+                      v-if="paidOf(item) === 0"
+                      size="x-small" variant="text" icon="mdi-delete" color="error"
+                      title="刪除" @click.stop="handleDelete(item)"
+                    />
+                  </div>
+                </td>
+              </tr>
+              <!-- 篩選結果合計 -->
+              <tr style="background:#f8fafc">
+                <td colspan="4" class="text-caption font-weight-bold text-right">篩選合計（{{ tableRows.length }} 筆）</td>
+                <td class="text-right text-caption font-weight-bold">{{ tableTotals.amount.toLocaleString() }}</td>
+                <td class="text-right text-caption font-weight-bold text-success">{{ tableTotals.paid.toLocaleString() }}</td>
+                <td class="text-right text-caption font-weight-bold text-error">{{ tableTotals.remaining.toLocaleString() }}</td>
+                <td colspan="2"></td>
+              </tr>
+            </tbody>
+          </v-table>
+        </div>
+        <div v-if="tablePages > 1" class="d-flex justify-space-between align-center px-1 py-2">
+          <v-btn icon size="x-small" variant="text" :disabled="tablePage <= 1" @click="tablePage--"><v-icon>mdi-chevron-left</v-icon></v-btn>
+          <span class="text-caption text-medium-emphasis">{{ tablePage }} / {{ tablePages }}（{{ tableRows.length }} 筆）</span>
+          <v-btn icon size="x-small" variant="text" :disabled="tablePage >= tablePages" @click="tablePage++"><v-icon>mdi-chevron-right</v-icon></v-btn>
         </div>
       </div>
     </v-card>
@@ -471,7 +464,7 @@
 </template>
 
 <script setup>
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
 import { buildFundAccountOptions, LEGACY_INCOME_ACCOUNT_MAP, CODES } from '../accounting/coa.js'
@@ -502,11 +495,32 @@ const accounting = inject('accounting')
 const selectedYear = ref(new Date().getFullYear().toString())
 const filterMember = ref(null)
 const filterStatus = ref('all')
-const expandedMonths = ref([])
+const filterPeriod = ref(null)
+const filterNature = ref(null)
+const filterItem = ref(null)
 const saving = ref(false)
 
 function toMinguoYear(adYear) { return parseInt(adYear) - 1911 }
 function todayStr() { return new Date().toISOString().split('T')[0] }
+
+// ── 帳期（民國年月，如 11507）與性質推導 ──
+function periodOf(r) {
+  const ym = r.periodStart || (r.dueDate ? r.dueDate.substring(0, 7) : '')
+  if (!ym) return '—'
+  const [y, m] = ym.split('-')
+  return `${parseInt(y) - 1911}${m}`
+}
+function natureOf(r) {
+  if (r.sourceType === 'agency' || r.accountCode === CODES.AGENCY) return '代收'
+  if (r.accountCode === '4101' || r.accountCode === '4106') return '社費'
+  if (r.accountCode === '4102') return '紅箱'
+  if ((r.accountCode || '').startsWith('5')) return '補助'
+  if (r.accountCode === CODES.TEMP_RECEIPT) return '暫收'
+  return '其他'
+}
+function natureColor(nature) {
+  return { 社費: 'primary', 紅箱: 'pink', 代收: 'warning', 補助: 'teal', 暫收: 'grey' }[nature] || 'grey'
+}
 
 // 年度為前端過濾（receivables 為全量載入，分錄引擎共用）
 const availableYears = computed(() => {
@@ -517,7 +531,6 @@ const availableYears = computed(() => {
 
 // 開單/批次名單只列現職社友（退社社友的既有欠費仍可於列表追蹤收款）
 const memberNames = computed(() => (members.value || []).filter(m => m.status !== 'left').map(m => m.name))
-const memberOptions = computed(() => memberNames.value)
 const categoryOptions = computed(() => (duesSettings.value || []).map(s => s.category))
 const fundOptions = computed(() => buildFundAccountOptions(members?.value, accounts?.value))
 const monthlyDues = computed(() => parseFloat(appSettings?.value?.['dues.monthlyAmount']) || 6000)
@@ -541,13 +554,29 @@ function paidOf(item) {
 }
 function remainingOf(item) {
   if (item.status === 'waived') return 0
-  return Math.max(0, item.amount - paidOf(item))
+  // 負數帳款（補助抵減）未收為負值，須計入合計與勾稽，不截斷為 0
+  return Math.round((item.amount - paidOf(item)) * 100) / 100
 }
 
-// ── 篩選 ──
+// ── 篩選（帳期/性質/項目/對象逐欄；狀態另計）──
+const yearItems = computed(() => (receivables.value || []).filter(r => r.dueYear === selectedYear.value))
+
+function applyColumnFilters(items) {
+  let out = items
+  if (filterPeriod.value) out = out.filter(r => periodOf(r) === filterPeriod.value)
+  if (filterNature.value) out = out.filter(r => natureOf(r) === filterNature.value)
+  if (filterItem.value) out = out.filter(r => r.sourceRef === filterItem.value)
+  if (filterMember.value) out = out.filter(r => r.memberName === filterMember.value)
+  return out
+}
+
+const periodOptions = computed(() => [...new Set(yearItems.value.map(periodOf))].sort())
+const natureOptions = computed(() => [...new Set(yearItems.value.map(natureOf))].sort())
+const itemOptions = computed(() => [...new Set(yearItems.value.map(r => r.sourceRef))].sort((a, b) => a.localeCompare(b, 'zh-Hant')))
+const targetOptions = computed(() => [...new Set(yearItems.value.map(r => r.memberName))].sort((a, b) => a.localeCompare(b, 'zh-Hant')))
+
 const filteredReceivables = computed(() => {
-  let items = (receivables.value || []).filter(r => r.dueYear === selectedYear.value)
-  if (filterMember.value) items = items.filter(r => r.memberName === filterMember.value)
+  let items = applyColumnFilters(yearItems.value)
   if (filterStatus.value === 'paid') items = items.filter(r => r.status === 'paid')
   else if (filterStatus.value === 'waived') items = items.filter(r => r.status === 'waived')
   else if (filterStatus.value === 'unpaid') items = items.filter(r => r.status === 'pending' || r.status === 'partial')
@@ -555,8 +584,7 @@ const filteredReceivables = computed(() => {
 })
 
 const yearSummary = computed(() => {
-  let items = (receivables.value || []).filter(r => r.dueYear === selectedYear.value)
-  if (filterMember.value) items = items.filter(r => r.memberName === filterMember.value)
+  const items = applyColumnFilters(yearItems.value)
   const active = items.filter(r => r.status !== 'waived')
   const totalTarget = active.reduce((s, r) => s + r.amount, 0)
   const totalPaid = active.reduce((s, r) => s + paidOf(r), 0)
@@ -564,39 +592,28 @@ const yearSummary = computed(() => {
   return { totalTarget, totalPaid, totalUnpaid: totalTarget - totalPaid, totalWaived }
 })
 
-const monthlyData = computed(() => {
-  const monthMap = {}
-  filteredReceivables.value.forEach(item => {
-    const key = item.dueDate ? item.dueDate.substring(0, 7) : `${selectedYear.value}-00`
-    if (!monthMap[key]) monthMap[key] = []
-    monthMap[key].push(item)
-  })
-
-  return Object.keys(monthMap).sort().map(key => {
-    const items = monthMap[key]
-    const activeItems = items.filter(r => r.status !== 'waived')
-    const targetAmount = activeItems.reduce((s, r) => s + r.amount, 0)
-    const paidAmount = activeItems.reduce((s, r) => s + paidOf(r), 0)
-
-    const groupMap = {}
-    items.forEach(item => {
-      const gKey = `${item.sourceType}:${item.sourceRef}`
-      if (!groupMap[gKey]) {
-        groupMap[gKey] = { sourceType: item.sourceType, title: item.sourceRef, perAmount: item.amount, members: [] }
-      }
-      groupMap[gKey].members.push(item)
-    })
-
-    const label = key.endsWith('-00') ? '未指定月份' : `${parseInt(key.split('-')[1])} 月`
-    return { key, label, items, targetAmount, paidAmount, groups: Object.values(groupMap) }
-  })
+// ── 平表列（帳期→項目→對象排序）＋分頁 ──
+const tableRows = computed(() =>
+  [...filteredReceivables.value].sort((a, b) =>
+    periodOf(a).localeCompare(periodOf(b)) ||
+    a.sourceRef.localeCompare(b.sourceRef, 'zh-Hant') ||
+    a.memberName.localeCompare(b.memberName, 'zh-Hant')
+  )
+)
+const tableTotals = computed(() => {
+  const active = tableRows.value.filter(r => r.status !== 'waived')
+  const amount = Math.round(active.reduce((s, r) => s + r.amount, 0) * 100) / 100
+  const paid = Math.round(active.reduce((s, r) => s + paidOf(r), 0) * 100) / 100
+  return { amount, paid, remaining: Math.round((amount - paid) * 100) / 100 }
 })
-
-function toggleMonth(key) {
-  const idx = expandedMonths.value.indexOf(key)
-  if (idx >= 0) expandedMonths.value.splice(idx, 1)
-  else expandedMonths.value.push(key)
-}
+const TABLE_PAGE_SIZE = 50
+const tablePage = ref(1)
+const tablePages = computed(() => Math.max(1, Math.ceil(tableRows.value.length / TABLE_PAGE_SIZE)))
+const pagedRows = computed(() => {
+  const p = Math.min(tablePage.value, tablePages.value)
+  return tableRows.value.slice((p - 1) * TABLE_PAGE_SIZE, p * TABLE_PAGE_SIZE)
+})
+watch([selectedYear, filterPeriod, filterNature, filterItem, filterMember, filterStatus], () => { tablePage.value = 1 })
 
 // ── 批次產生 ──
 const batchModal = ref(false)
