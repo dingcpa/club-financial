@@ -34,34 +34,6 @@
     </div>
 
     <template v-else>
-      <!-- 摘要卡 -->
-      <v-row dense class="mb-3">
-        <v-col cols="12" sm="4">
-          <v-card elevation="1" class="pa-3 pa-sm-4" style="border-left:4px solid #15803d">
-            <div class="text-caption"><span style="color:#15803d">■</span> 本月合計收入</div>
-            <div class="mt-1"><span class="text-caption text-medium-emphasis">NT$</span>
-              <span class="text-h5 font-weight-bold" style="color:#15803d">{{ fmt(totalIncome) }}</span></div>
-            <div class="text-caption text-medium-emphasis mt-1">{{ incomeCaption }}</div>
-          </v-card>
-        </v-col>
-        <v-col cols="12" sm="4">
-          <v-card elevation="1" class="pa-3 pa-sm-4" style="border-left:4px solid #b91c1c">
-            <div class="text-caption"><span style="color:#b91c1c">■</span> 本月合計支出</div>
-            <div class="mt-1"><span class="text-caption text-medium-emphasis">NT$</span>
-              <span class="text-h5 font-weight-bold" style="color:#b91c1c">{{ fmt(totalExpense) }}</span></div>
-            <div class="text-caption text-medium-emphasis mt-1">{{ expenseCaption }}</div>
-          </v-card>
-        </v-col>
-        <v-col cols="12" sm="4">
-          <v-card elevation="1" class="pa-3 pa-sm-4" style="border-left:4px solid #1d4ed8">
-            <div class="text-caption"><span style="color:#1d4ed8">■</span> 本月收支餘額</div>
-            <div class="mt-1"><span class="text-caption text-medium-emphasis">NT$</span>
-              <span class="text-h5 font-weight-bold" :style="`color:${net >= 0 ? '#15803d' : '#b91c1c'}`">{{ fmt(net) }}</span></div>
-            <div class="text-caption text-medium-emphasis mt-1">收入 − 支出（本月淨{{ net >= 0 ? '餘絀' : '短絀' }}）</div>
-          </v-card>
-        </v-col>
-      </v-row>
-
       <!-- 雙欄明細表 -->
       <v-row dense class="mb-3">
         <!-- 收入明細表 -->
@@ -131,6 +103,34 @@
                 </template>
               </tbody>
             </v-table>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- 本月收支摘要卡：本月收入 − 本月支出 ＝ 本月結餘 -->
+      <v-row dense class="mb-3">
+        <v-col cols="12" sm="4">
+          <v-card elevation="1" class="pa-3 pa-sm-4" style="border-left:4px solid #15803d">
+            <div class="text-caption"><span style="color:#15803d">■</span> 本月合計收入</div>
+            <div class="mt-1"><span class="text-caption text-medium-emphasis">NT$</span>
+              <span class="text-h5 font-weight-bold" style="color:#15803d">{{ fmt(totalIncome) }}</span></div>
+            <div class="text-caption text-medium-emphasis mt-1">{{ incomeCaption }}</div>
+          </v-card>
+        </v-col>
+        <v-col cols="12" sm="4">
+          <v-card elevation="1" class="pa-3 pa-sm-4" style="border-left:4px solid #b91c1c">
+            <div class="text-caption"><span style="color:#b91c1c">■</span> 本月合計支出</div>
+            <div class="mt-1"><span class="text-caption text-medium-emphasis">NT$</span>
+              <span class="text-h5 font-weight-bold" style="color:#b91c1c">{{ fmt(totalExpense) }}</span></div>
+            <div class="text-caption text-medium-emphasis mt-1">{{ expenseCaption }}</div>
+          </v-card>
+        </v-col>
+        <v-col cols="12" sm="4">
+          <v-card elevation="1" class="pa-3 pa-sm-4" style="border-left:4px solid #1d4ed8">
+            <div class="text-caption"><span style="color:#1d4ed8">■</span> 本月收支餘額</div>
+            <div class="mt-1"><span class="text-caption text-medium-emphasis">NT$</span>
+              <span class="text-h5 font-weight-bold" :style="`color:${net >= 0 ? '#15803d' : '#b91c1c'}`">{{ fmt(net) }}</span></div>
+            <div class="text-caption text-medium-emphasis mt-1">收入 − 支出（本月淨{{ net >= 0 ? '餘絀' : '短絀' }}）</div>
           </v-card>
         </v-col>
       </v-row>
