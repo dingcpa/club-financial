@@ -149,6 +149,7 @@ function buildMemberRow(body, id) {
         status: ['left', 'onleave'].includes(status) ? status : 'active',
         leaveDate: leaveDate || null,
         bankAccountLast5: bankAccountLast5 ? String(bankAccountLast5).trim() : null,
+        sortOrder: body.sortOrder != null && body.sortOrder !== '' ? parseInt(body.sortOrder) : null,
     };
 }
 
@@ -1016,6 +1017,76 @@ app.put('/api/receivables/:id/reopen', async (req, res) => {
         res.json(parseReceivable(updated[0]));
     } catch (e) {
         res.status(500).json({ error: 'Failed to reopen receivable' });
+    }
+});
+
+// ─── Meetings（理監事會議程）────────────────────────────────
+function parseMeeting(row) {
+    let agenda = { reports: [], proposals: [] };
+    try { agenda = { reports: [], proposals: [], ...JSON.parse(row.agenda || '{}') }; } catch (e) { /* 保留預設 */ }
+    return { ...row, agenda };
+}
+
+app.get('/api/meetings', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM meetings ORDER BY meetingDate DESC, id DESC');
+        res.json(rows.map(parseMeeting));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read meetings' });
+    }
+});
+
+app.post('/api/meetings', async (req, res) => {
+    try {
+        const { title, meetingDate, meetingTime, location, note, agenda } = req.body || {};
+        if (!title) return res.status(400).json({ error: '缺少會議名稱' });
+        const row = {
+            id: Date.now(),
+            title,
+            meetingDate: meetingDate || null,
+            meetingTime: meetingTime || null,
+            location: location || null,
+            note: note || null,
+            agenda: JSON.stringify(agenda && typeof agenda === 'object' ? agenda : { reports: [], proposals: [] }),
+        };
+        await pool.query('INSERT INTO meetings SET ?', [row]);
+        res.status(201).json(parseMeeting(row));
+    } catch (e) {
+        console.error('Error creating meeting:', e);
+        res.status(500).json({ error: 'Failed to create meeting' });
+    }
+});
+
+app.put('/api/meetings/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [rows] = await pool.query('SELECT * FROM meetings WHERE id=?', [id]);
+        if (!rows.length) return res.status(404).json({ error: 'Meeting not found' });
+        const cur = rows[0];
+        const { title, meetingDate, meetingTime, location, note, agenda } = req.body || {};
+        const updated = {
+            title: title !== undefined ? title : cur.title,
+            meetingDate: meetingDate !== undefined ? (meetingDate || null) : cur.meetingDate,
+            meetingTime: meetingTime !== undefined ? (meetingTime || null) : cur.meetingTime,
+            location: location !== undefined ? (location || null) : cur.location,
+            note: note !== undefined ? (note || null) : cur.note,
+            agenda: agenda !== undefined ? JSON.stringify(agenda || { reports: [], proposals: [] }) : cur.agenda,
+        };
+        await pool.query('UPDATE meetings SET ? WHERE id=?', [updated, id]);
+        res.json(parseMeeting({ ...cur, ...updated }));
+    } catch (e) {
+        console.error('Error updating meeting:', e);
+        res.status(500).json({ error: 'Failed to update meeting' });
+    }
+});
+
+app.delete('/api/meetings/:id', async (req, res) => {
+    try {
+        const [result] = await pool.query('DELETE FROM meetings WHERE id=?', [parseInt(req.params.id)]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Meeting not found' });
+        res.json({ message: 'Meeting deleted' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete meeting' });
     }
 });
 

@@ -45,7 +45,7 @@
             <v-col cols="12" sm="6" md="3">
               <v-row no-gutters>
                 <v-col>
-                  <v-select v-model="formData.jobTitle2" label="職稱 2" :items="JOB_TITLES_2" :item-title="i => i === 'CUSTOM' ? '+ 新增其他...' : (i || '(無)')" density="compact" variant="outlined" />
+                  <v-select v-model="formData.jobTitle2" label="理監事" :items="JOB_TITLES_2" :item-title="i => i === 'CUSTOM' ? '+ 新增其他...' : (i || '無')" density="compact" variant="outlined" />
                 </v-col>
                 <v-col v-if="formData.jobTitle2 === 'CUSTOM'" cols="auto" class="pl-1">
                   <v-text-field v-model="formData.customJobTitle2" label="自訂" density="compact" variant="outlined" style="min-width:80px" />
@@ -104,17 +104,18 @@
               <th style="min-width:80px" class="text-caption">姓名</th>
               <th style="width:60px" class="text-caption">社名</th>
               <th style="width:60px" class="text-caption">狀態</th>
-              <th style="width:80px" class="text-caption">職稱</th>
-              <th style="width:90px" class="text-caption d-none d-md-table-cell">生日</th>
+              <th style="width:90px;white-space:nowrap" class="text-caption">職稱</th>
+              <th style="width:60px;white-space:nowrap" class="text-caption">理監事</th>
+              <th style="width:96px;white-space:nowrap" class="text-caption d-none d-md-table-cell">生日</th>
               <th style="width:160px" class="text-caption">聯絡</th>
-              <th style="width:80px" class="text-caption d-none d-sm-table-cell">帳號末碼</th>
+              <th style="width:60px" class="text-caption d-none d-sm-table-cell"><div>帳號</div><div>末碼</div></th>
               <th style="max-width:120px" class="text-caption d-none d-lg-table-cell">地址</th>
               <th class="text-center text-caption" style="width:80px">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="filteredMembers.length === 0">
-              <td colspan="9" class="text-center text-medium-emphasis pa-8">尚未建立資料</td>
+              <td colspan="10" class="text-center text-medium-emphasis pa-8">尚未建立資料</td>
             </tr>
             <tr v-for="(member, i) in filteredMembers" :key="member.id" :class="[i % 2 === 0 ? 'bg-white' : 'bg-grey-lighten-5', member.status === 'left' ? 'text-medium-emphasis' : '']">
               <td class="text-caption font-weight-medium">
@@ -128,13 +129,16 @@
                   {{ STATUS_LABELS[member.status] || '正常' }}
                 </v-chip>
               </td>
-              <td>
-                <div class="d-flex flex-column">
-                  <span class="text-caption text-primary font-weight-bold">{{ member.jobTitle1 || '社友' }}</span>
-                  <span v-if="member.jobTitle2" class="text-caption text-medium-emphasis">{{ member.jobTitle2 }}</span>
-                </div>
+              <td style="white-space:nowrap">
+                <span class="text-caption text-primary font-weight-bold">{{ member.jobTitle1 || '社友' }}</span>
               </td>
-              <td class="text-caption text-medium-emphasis d-none d-md-table-cell">{{ member.birthday }}</td>
+              <td>
+                <v-chip v-if="member.jobTitle2" size="x-small" :color="member.jobTitle2 === '監事' ? 'deep-orange' : 'indigo'" variant="tonal">
+                  {{ member.jobTitle2 }}
+                </v-chip>
+                <span v-else class="text-caption text-medium-emphasis">無</span>
+              </td>
+              <td class="text-caption text-medium-emphasis d-none d-md-table-cell" style="white-space:nowrap">{{ member.birthday }}</td>
               <td>
                 <div class="text-caption d-flex flex-column ga-1">
                   <div><v-icon size="10" color="primary">mdi-cellphone</v-icon> {{ member.mobile || '-' }}</div>
@@ -189,9 +193,8 @@ const STATUS_OPTIONS = [
 const STATUS_LABELS = { active: '正常', onleave: '請假', left: '退社' }
 const STATUS_COLORS = { active: 'success', onleave: 'warning', left: 'error' }
 
-const JOB_TITLES_1 = ['社長(P)', '祕書(S)', '社當(PE)', '副社長(VP)', '前社長(PP)', '社友']
+const JOB_TITLES_1 = ['前社長(PP)', '卸任社長(IPP)', '社長(P)', '社當(PE)', '副社長(VP)', '祕書(S)', '社友']
 const JOB_TITLES_2 = ['', '理事', '監事', 'CUSTOM']
-const TITLE_ORDER = { '社長(P)': 1, '祕書(S)': 2, '社當(PE)': 3, '副社長(VP)': 4, '前社長(PP)': 5, '社友': 6, '': 7 }
 
 function makeDefaultForm() {
   return { name: '', nickname: '', birthday: '', phone: '', mobile: '', email: '', address: '', jobTitle1: '社友', jobTitle2: '', customJobTitle2: '', status: 'active', leaveDate: '', bankAccountLast5: '' }
@@ -314,9 +317,10 @@ const filteredMembers = computed(() => {
       (m.jobTitle1 && m.jobTitle1.includes(term))
     )
     .sort((a, b) => {
-      const pA = TITLE_ORDER[a.jobTitle1 || '社友'] || 99
-      const pB = TITLE_ORDER[b.jobTitle1 || '社友'] || 99
-      if (pA !== pB) return pA - pB
+      // 依社友資料表順序（sortOrder；未設定者排最後再按姓名）
+      const sA = a.sortOrder != null ? a.sortOrder : 9999
+      const sB = b.sortOrder != null ? b.sortOrder : 9999
+      if (sA !== sB) return sA - sB
       return a.name.localeCompare(b.name, 'zh-Hant')
     })
 })

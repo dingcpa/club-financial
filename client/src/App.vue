@@ -133,6 +133,9 @@ import RedboxStats from './pages/RedboxStats.vue'
 import LineBilling from './pages/LineBilling.vue'
 import ReceiptIssue from './pages/ReceiptIssue.vue'
 import ActivityManagement from './pages/ActivityManagement.vue'
+import MeetingAgenda from './pages/MeetingAgenda.vue'
+import ClubJournal from './pages/ClubJournal.vue'
+import CalendarPage from './pages/CalendarPage.vue'
 import ClosingWizard from './pages/ClosingWizard.vue'
 import { useAccounting } from './composables/useAccounting.js'
 
@@ -190,9 +193,10 @@ const mgmtItems = [
   { tab: 'redbox-stats', icon: 'mdi-gift-outline', title: '紅箱統計' },
   { tab: 'line-billing', icon: 'mdi-bell-ring-outline', title: 'Line請款' },
   { tab: 'receipt-issue', icon: 'mdi-receipt-text-outline', title: '開立收據' },
-]
-const activityItems = [
   { tab: 'activities', icon: 'mdi-calendar-star', title: '活動管理' },
+  { tab: 'meetings', icon: 'mdi-gavel', title: '會議議程' },
+  { tab: 'club-journal', icon: 'mdi-book-open-page-variant', title: '社刊管理' },
+  { tab: 'calendar', icon: 'mdi-calendar-month', title: '行事曆' },
 ]
 const settingItems = [
   { tab: 'members', icon: 'mdi-account-multiple', title: '社友名冊' },
@@ -207,8 +211,7 @@ const visibleMenuGroups = computed(() => [
   { value: 'transactions', icon: 'mdi-file-document-outline', title: '收支單據', items: docItems, show: !isViewer.value },
   { value: 'reports', icon: 'mdi-chart-bar', title: '報表查詢', items: reportItems, show: true },
   { value: 'books', icon: 'mdi-notebook-multiple', title: '帳冊查詢', items: bookItems, show: !isViewer.value },
-  { value: 'mgmt', icon: 'mdi-cash-register', title: '帳務管理', items: mgmtItems, show: !isViewer.value },
-  { value: 'activities', icon: 'mdi-calendar-star', title: '活動管理', items: activityItems, show: !isViewer.value },
+  { value: 'mgmt', icon: 'mdi-briefcase-outline', title: '社務管理', items: mgmtItems, show: !isViewer.value },
   { value: 'settings', icon: 'mdi-cog', title: '基本設定', items: settingItems.filter(i => !i.adminOnly || isAdmin.value), show: !isViewer.value },
   { value: 'admin', icon: 'mdi-shield-account', title: '系統管理', items: adminItems, show: isAdmin.value },
 ].filter(g => g.show && g.items.length > 0))
@@ -228,6 +231,9 @@ const pageMap = {
   'line-billing': LineBilling,
   'receipt-issue': ReceiptIssue,
   'activities': ActivityManagement,
+  'meetings': MeetingAgenda,
+  'club-journal': ClubJournal,
+  'calendar': CalendarPage,
   'categories': CategorySettings,
   'income': IncomeForm,
   'income-list': RecordListPanel,

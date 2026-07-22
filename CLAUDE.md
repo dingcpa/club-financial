@@ -93,7 +93,8 @@ club-financial/
 | `manual_journals` | ★ 手工傳票（調整分錄；後端強制借貸平衡）|
 | `opening_balances` | ★ 期初餘額（基準日各科目/人員；累積餘絀由引擎軋差）|
 | `app_settings` | ★ 系統參數（accounting.baseDate、accounting.lockDate 關帳日、dues.monthlyAmount）|
-| `members` | 名冊（status active 正常/onleave 請假/left 退社、leaveDate、bankAccountLast5 收款對帳用）|
+| `members` | 名冊（status active 正常/onleave 請假/left 退社、leaveDate、bankAccountLast5 收款對帳用、sortOrder 名冊排序）|
+| `meetings` | 理監事會議（title/日期/時間/地點＋agenda JSON：reports 報告事項、proposals 提案 {subject,description,resolution}）|
 | `bank_reconciliations` | 銀行存款核對（帳戶/核對日/存摺餘額；同科目同日覆蓋）|
 | `budgets` | 年度預算（扶輪年度＋科目，整批覆寫）|
 | `attachments` | 佐證附件（refType finance/journal；壓縮後 base64，每單據最多 3 張）|
@@ -135,6 +136,7 @@ club-financial/
 | `/attachments` | 附件 metadata / 單筆含 data / 刪除（新增隨 finance、manual-journals 的 `attachments` 欄位一併寫入）|
 | `/notifications`＋`/notifications/dues-reminder` | 通知紀錄 / 催繳（LINE 群組推播或文字草稿）|
 | `/share-links`（admin） | 唯讀分享連結管理 |
+| `/meetings` | 理監事會議 CRUD（agenda JSON 議案內容）|
 
 ## 前端
 
@@ -146,7 +148,7 @@ club-financial/
 
 ### 左側選單（App.vue，七組；空群組自動隱藏）
 
-收支單據（收款單/付款單/調撥單/手工傳票）→ 報表查詢（月報/BS/CF/預算；viewer 僅此組）→ 帳冊查詢（繳費總覽/帳款明細表/預收明細表/代收付明細表/分類帳/日記帳）→ 帳務管理（紅箱統計/Line請款/開立收據）→ 活動管理 → 基本設定（名冊/科目類別/期初/關帳）→ 系統管理（帳號）。
+收支單據（收款單/付款單/調撥單/手工傳票）→ 報表查詢（月報/BS/CF/預算；viewer 僅此組）→ 帳冊查詢（繳費總覽/帳款明細表/預收明細表/代收付明細表/分類帳/日記帳）→ 社務管理（紅箱統計/Line請款/開立收據/活動管理/會議議程/社刊管理/行事曆）→ 基本設定（名冊/科目類別/期初/關帳）→ 系統管理（帳號）。
 查詢收/付/調撥單選單項已移除，入口改為各表單頁的「歷史單據」按鈕（pageMap 保留 income-list 等 key）。「分類帳」「日記帳」共用 LedgerBrowser，依 activeTab 開對 tab（試算表為第三 tab）。
 
 ### 頁面元件（`client/src/pages/`）
@@ -172,7 +174,9 @@ club-financial/
 | `LineBilling.vue` | Line請款（未收帳款篩選→可編輯請款訊息→LINE 群組推播/複製＋通知紀錄；LINE 未設定自動降級）|
 | `ReceiptIssue.vue` | 開立收據（帶入收款紀錄組收據、年度流水取號、國字大寫金額、列印/作廢浮水印）|
 | `ActivityManagement.vue` | 活動管理（活動主檔＋按社友報名明細：參加/用餐/住房/上車地點；統計自動加總）|
-| `MemberDues.vue` / `MemberList.vue` | 繳費總覽（欄位＝該年度已開帳款項目；社費四項合併為一欄，點金額開細項 dialog）/ 名冊（狀態、銀行末五碼、Excel 匯入）|
+| `MemberDues.vue` / `MemberList.vue` | 繳費總覽（欄位＝該年度已開帳款項目；社費四項合併為一欄，點金額開細項 dialog）/ 名冊（依 sortOrder 排序、職稱含 IPP、理監事欄、狀態、銀行末五碼、Excel 匯入）|
+| `MeetingAgenda.vue` | 會議議程（理監事會列表＋議案編輯：報告事項/提案 案由說明決議；列印議程、一鍵產生會議文件＝議程＋月報表＋BS＋三附表，期間依會議日期當月）|
+| `ClubJournal.vue` / `CalendarPage.vue` | 社刊管理（占位，待擴充）/ 行事曆（月曆格：活動管理 activityDate＋理監事會議）|
 | `components/AttachmentPanel.vue` | 附件元件（壓縮上傳、檢視、刪除；四張單據表單共用）|
 | `components/PrintSheet.vue` | 共用列印機制（Teleport＋`src/print.css` @media print；月報表與收據共用）|
 | `CategorySettings.vue` | 科目/帳款類別/系統參數 三分頁設定（專案分頁已移至活動管理）|

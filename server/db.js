@@ -246,6 +246,20 @@ async function initDB() {
       KEY idx_fy (fy)
     ) CHARACTER SET utf8mb4
   `)
+  // 理監事會議程（會議主檔＋議案 JSON：reports 報告事項 / proposals 提案討論）
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS meetings (
+      id BIGINT PRIMARY KEY,
+      title VARCHAR(200) NOT NULL,
+      meetingDate VARCHAR(10),
+      meetingTime VARCHAR(20),
+      location VARCHAR(200),
+      agenda LONGTEXT,
+      note TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) CHARACTER SET utf8mb4
+  `)
   // 為已存在的 users 表補上 role 欄位（MariaDB 支援 IF NOT EXISTS）
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`)
   // 為已存在的 dues_settings 補上「類型」與「對方科目」欄位
@@ -271,6 +285,8 @@ async function initDB() {
   await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'`)
   await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS leaveDate VARCHAR(20)`)
   await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS bankAccountLast5 VARCHAR(10)`)
+  // 名冊排序（依社友資料表順序；NULL 排最後）
+  await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS sortOrder INT`)
   // 單據雙日期：發生日期（權責歸屬；未填視同單據日期）
   await pool.query(`ALTER TABLE finance ADD COLUMN IF NOT EXISTS occurredDate VARCHAR(20)`)
   // 活動管理：projects 擴充活動屬性欄位
