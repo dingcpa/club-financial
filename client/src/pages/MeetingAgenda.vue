@@ -71,7 +71,7 @@
             <v-col cols="12" sm="4"><v-text-field v-model="form.location" label="地點" density="compact" variant="outlined" hide-details /></v-col>
           </v-row>
           <div class="text-caption text-medium-emphasis mt-2">
-            會議文件之財務報表期間依會議日期自動取當月（{{ reportMonthLabel }}）；含收支月報表、資產負債表與三張附表。
+            會議文件之財務報表期間依會議日期自動取當月（{{ reportMonthLabel }}）；含收支月報表、資產負債表與應收/應付/預收/代收付四張附表。
           </div>
         </v-card-text>
       </v-card>
@@ -282,10 +282,31 @@
           <div class="print-footer">負數項目為補助抵減（借費用／貸應收）。</div>
         </div>
 
-        <!-- 附表二：預收明細 -->
+        <!-- 附表二：應付明細統計 -->
         <div style="page-break-before:always">
           <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
-          <div class="print-title">附表二　預收明細表</div>
+          <div class="print-title">附表二　應付明細表（項目統計）</div>
+          <div class="print-meta">民國 {{ reportYearMinguo }} 年度　・　幣別：新臺幣 NT$</div>
+          <table>
+            <thead>
+              <tr><th>科目 / 項目</th><th style="width:100px">對象</th><th class="num" style="width:52px">筆數</th><th class="num" style="width:92px">應付</th><th class="num" style="width:92px">已付</th><th class="num" style="width:92px">未付</th><th class="num" style="width:82px">免付</th></tr>
+            </thead>
+            <tbody>
+              <template v-for="g in apStats.groups" :key="g.code">
+                <tr class="group"><td colspan="2">{{ g.label }}</td><td class="num">{{ g.count }}</td><td class="num">{{ fmt(g.target) }}</td><td class="num">{{ fmt(g.paid) }}</td><td class="num">{{ fmt(g.unpaid) }}</td><td class="num">{{ g.waived ? fmt(g.waived) : '—' }}</td></tr>
+                <tr v-for="it in g.items" :key="it.key"><td style="padding-left:22px">{{ it.item }}</td><td>{{ it.payee }}</td><td class="num">{{ it.count }}</td><td class="num">{{ fmt(it.target) }}</td><td class="num">{{ fmt(it.paid) }}</td><td class="num">{{ fmt(it.unpaid) }}</td><td class="num">{{ it.waived ? fmt(it.waived) : '—' }}</td></tr>
+              </template>
+              <tr v-if="!apStats.groups.length"><td colspan="7">（本年度無應付帳款）</td></tr>
+              <tr class="total"><td colspan="2">合計</td><td class="num">{{ apStats.total.count }}</td><td class="num">{{ fmt(apStats.total.target) }}</td><td class="num">{{ fmt(apStats.total.paid) }}</td><td class="num">{{ fmt(apStats.total.unpaid) }}</td><td class="num">{{ apStats.total.waived ? fmt(apStats.total.waived) : '—' }}</td></tr>
+            </tbody>
+          </table>
+          <div class="print-footer">應付立帳＝費用認列日（借費用或代收款轉繳／貸 2112 應付帳款）；付款單沖帳不再認列費用。</div>
+        </div>
+
+        <!-- 附表三：預收明細 -->
+        <div style="page-break-before:always">
+          <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
+          <div class="print-title">附表三　預收明細表</div>
           <div class="print-meta">基準日 {{ toMinguoDate(asOf) }}　・　期初預收＋本期新增－本期轉列收入＝期末餘額</div>
           <template v-for="sec in prepaidSections" :key="sec.code">
             <div class="print-section-title">{{ sec.code }} {{ sec.name }}</div>
@@ -299,10 +320,10 @@
           </template>
         </div>
 
-        <!-- 附表三：代收付明細 -->
+        <!-- 附表四：代收付明細 -->
         <div style="page-break-before:always">
           <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
-          <div class="print-title">附表三　代收付明細表</div>
+          <div class="print-title">附表四　代收付明細表</div>
           <div class="print-meta">基準日 {{ toMinguoDate(asOf) }}　・　代收款（2111）按案名彙總</div>
           <table>
             <thead><tr><th>案名 / 對象</th><th class="num" style="width:120px">開單/收現（貸）</th><th class="num" style="width:120px">付出（借）</th><th class="num" style="width:120px">餘額</th></tr></thead>
@@ -331,6 +352,8 @@ import PrintSheet from '../components/PrintSheet.vue'
 const { xs } = useDisplay()
 const accounting = inject('accounting')
 const receivables = inject('receivables')
+const payables = inject('payables', null)
+const accounts = inject('accounts')
 
 const CN_NUMS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五']
 
@@ -543,7 +566,49 @@ const arStats = computed(() => {
   return { groups, total }
 })
 
-// 附表二：預收明細（年度 7/1 起至基準日）
+// 附表二：應付統計（會議年度；科目 → 項目×對象）
+const apStats = computed(() => {
+  const year = reportYm.value.slice(0, 4)
+  const acctLabel = (code) => {
+    const a = (accounts?.value || []).find(x => x.code === code)
+    return a ? `${a.code} ${a.name}` : (code || '—')
+  }
+  const paidOfP = (p) => {
+    if (p.status === 'paid') return p.paidAmount != null ? p.paidAmount : p.amount
+    if (p.status === 'partial') return p.paidAmount || 0
+    return 0
+  }
+  const byCode = new Map()
+  for (const p of payables?.value || []) {
+    if (String(p.dueYear) !== year) continue
+    const code = p.accountCode || '—'
+    if (!byCode.has(code)) byCode.set(code, new Map())
+    const items = byCode.get(code)
+    const key = `${p.sourceRef}|${p.payee}`
+    if (!items.has(key)) items.set(key, { key, item: p.sourceRef, payee: p.payee, count: 0, target: 0, paid: 0, waived: 0 })
+    const g = items.get(key)
+    g.count++
+    if (p.status === 'waived') g.waived += p.amount
+    else { g.target += p.amount; g.paid += paidOfP(p) }
+  }
+  const groups = [...byCode.keys()].sort().map(code => {
+    const items = [...byCode.get(code).values()]
+      .map(g => ({ ...g, target: r2(g.target), paid: r2(g.paid), waived: r2(g.waived), unpaid: r2(g.target - g.paid) }))
+      .sort((a, b) => a.item.localeCompare(b.item, 'zh-Hant') || a.payee.localeCompare(b.payee, 'zh-Hant'))
+    const sum = (f) => r2(items.reduce((s, g) => s + g[f], 0))
+    return { code, label: acctLabel(code), items, count: items.reduce((s, g) => s + g.count, 0), target: sum('target'), paid: sum('paid'), unpaid: sum('unpaid'), waived: sum('waived') }
+  })
+  const total = {
+    count: groups.reduce((s, g) => s + g.count, 0),
+    target: r2(groups.reduce((s, g) => s + g.target, 0)),
+    paid: r2(groups.reduce((s, g) => s + g.paid, 0)),
+    unpaid: r2(groups.reduce((s, g) => s + g.unpaid, 0)),
+    waived: r2(groups.reduce((s, g) => s + g.waived, 0)),
+  }
+  return { groups, total }
+})
+
+// 附表三：預收明細（年度 7/1 起至基準日）
 function buildPrepaidSection(code) {
   const [fyStart] = fyRange(reportFy.value)
   const map = new Map()

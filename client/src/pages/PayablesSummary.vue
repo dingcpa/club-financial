@@ -11,6 +11,7 @@
           <span class="text-body-1 text-sm-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 應付明細表</span>
         </div>
         <div class="d-flex flex-wrap ga-2 align-center">
+          <v-btn color="primary" variant="tonal" prepend-icon="mdi-printer" size="small" @click="printReport">產生附表</v-btn>
           <v-btn color="primary" prepend-icon="mdi-plus" size="small" @click="openCreateModal">新增應付帳款</v-btn>
           <v-select
             v-model="selectedYear"
@@ -171,6 +172,60 @@
       </div>
     </v-card>
 
+    <!-- 列印附表：科目×項目統計 -->
+    <PrintSheet>
+      <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
+      <div class="print-title">應付明細表（項目統計）</div>
+      <div class="print-meta">民國 {{ toMinguoYear(selectedYear) }} 年度　・　製表日 {{ toMinguoDate(todayStr()) }}　・　幣別：新臺幣 NT$</div>
+      <table>
+        <thead>
+          <tr>
+            <th>科目 / 項目</th>
+            <th style="width:110px">對象</th>
+            <th class="num" style="width:56px">筆數</th>
+            <th class="num" style="width:96px">應付</th>
+            <th class="num" style="width:96px">已付</th>
+            <th class="num" style="width:96px">未付</th>
+            <th class="num" style="width:86px">免付</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-for="g in printStats" :key="g.code">
+            <tr class="group">
+              <td colspan="2">{{ g.label }}</td>
+              <td class="num">{{ g.count }}</td>
+              <td class="num">{{ g.target.toLocaleString() }}</td>
+              <td class="num">{{ g.paid.toLocaleString() }}</td>
+              <td class="num">{{ g.unpaid.toLocaleString() }}</td>
+              <td class="num">{{ g.waived ? g.waived.toLocaleString() : '—' }}</td>
+            </tr>
+            <tr v-for="it in g.items" :key="it.key">
+              <td style="padding-left:22px">{{ it.item }}</td>
+              <td>{{ it.payee }}</td>
+              <td class="num">{{ it.count }}</td>
+              <td class="num">{{ it.target.toLocaleString() }}</td>
+              <td class="num">{{ it.paid.toLocaleString() }}</td>
+              <td class="num">{{ it.unpaid.toLocaleString() }}</td>
+              <td class="num">{{ it.waived ? it.waived.toLocaleString() : '—' }}</td>
+            </tr>
+          </template>
+          <tr class="total">
+            <td colspan="2">合計</td>
+            <td class="num">{{ printGrand.count }}</td>
+            <td class="num">{{ printGrand.target.toLocaleString() }}</td>
+            <td class="num">{{ printGrand.paid.toLocaleString() }}</td>
+            <td class="num">{{ printGrand.unpaid.toLocaleString() }}</td>
+            <td class="num">{{ printGrand.waived ? printGrand.waived.toLocaleString() : '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="print-footer">
+        科目 2111 為代收款轉繳義務（立帳借代收款／貸應付）。應付明細未付合計與帳上應付帳款（2112）餘額勾稽：
+        {{ apTieOut.matched ? '一致' : '不一致' }}（明細 {{ apTieOut.detailTotal.toLocaleString() }}／總帳 {{ apTieOut.ledgerTotal.toLocaleString() }}）。
+      </div>
+      <div class="print-sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>
+    </PrintSheet>
+
     <!-- 新增 / 編輯 Dialog -->
     <v-dialog v-model="editModal" :max-width="xs ? undefined : 460" :fullscreen="xs">
       <v-card>
@@ -260,6 +315,8 @@ import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
 import { buildFundAccountOptions, CODES } from '../accounting/coa.js'
 import { balancesAsOf } from '../accounting/ledger.js'
+import { toMinguoDate } from '../accounting/fiscal.js'
+import PrintSheet from '../components/PrintSheet.vue'
 
 const { xs } = useDisplay()
 
@@ -390,6 +447,40 @@ const apTieOut = computed(() => {
     matched: Math.round(detailTotal * 100) === Math.round(ledgerTotal * 100),
   }
 })
+
+// ── 列印附表：全年度 科目 → 項目×對象 統計（不受畫面篩選影響）──
+const printStats = computed(() => {
+  const r2 = (n) => Math.round(n * 100) / 100
+  const byCode = new Map()
+  for (const p of yearItems.value) {
+    const code = p.accountCode || '—'
+    if (!byCode.has(code)) byCode.set(code, new Map())
+    const items = byCode.get(code)
+    const key = `${p.sourceRef}|${p.payee}`
+    if (!items.has(key)) items.set(key, { key, item: p.sourceRef, payee: p.payee, count: 0, target: 0, paid: 0, waived: 0 })
+    const g = items.get(key)
+    g.count++
+    if (p.status === 'waived') g.waived += p.amount
+    else { g.target += p.amount; g.paid += paidOf(p) }
+  }
+  return [...byCode.keys()].sort().map(code => {
+    const items = [...byCode.get(code).values()]
+      .map(g => ({ ...g, target: r2(g.target), paid: r2(g.paid), waived: r2(g.waived), unpaid: r2(g.target - g.paid) }))
+      .sort((a, b) => a.item.localeCompare(b.item, 'zh-Hant') || a.payee.localeCompare(b.payee, 'zh-Hant'))
+    const sum = (f) => r2(items.reduce((s, g) => s + g[f], 0))
+    return {
+      code, label: acctLabel(code), items,
+      count: items.reduce((s, g) => s + g.count, 0),
+      target: sum('target'), paid: sum('paid'), unpaid: sum('unpaid'), waived: sum('waived'),
+    }
+  })
+})
+const printGrand = computed(() => {
+  const r2 = (n) => Math.round(n * 100) / 100
+  const sum = (f) => r2(printStats.value.reduce((s, g) => s + g[f], 0))
+  return { count: printStats.value.reduce((s, g) => s + g.count, 0), target: sum('target'), paid: sum('paid'), unpaid: sum('unpaid'), waived: sum('waived') }
+})
+function printReport() { window.print() }
 
 // ── 新增 / 編輯 ──
 const editModal = ref(false)
