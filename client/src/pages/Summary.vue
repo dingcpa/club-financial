@@ -213,16 +213,32 @@
         </div>
       </div>
 
+      <!-- 本月收入 − 本月支出 ＝ 本月結餘 -->
       <table>
         <tbody>
+          <tr>
+            <td>本月合計收入</td><td class="num" style="width:130px">{{ fmt(totalIncome) }}</td>
+          </tr>
+          <tr>
+            <td>－ 本月合計支出</td><td class="num">{{ fmt(totalExpense) }}</td>
+          </tr>
           <tr class="total">
+            <td>＝ 本月結餘（本月淨{{ net >= 0 ? '餘絀' : '短絀' }}）</td><td class="num">{{ fmt(net) }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 本月結餘 ＋ 上月結餘 ＝ 累計結餘 -->
+      <table>
+        <tbody>
+          <tr>
             <td>本月結餘</td><td class="num" style="width:130px">{{ fmt(net) }}</td>
           </tr>
           <tr>
             <td>＋ 上月結餘（年度 7/1 起累計至上月底）</td><td class="num">{{ fmt(prevCumNet) }}</td>
           </tr>
           <tr class="total">
-            <td>＝ 累計結餘（本年度累計淨餘絀）</td><td class="num">{{ fmt(cumNet) }}</td>
+            <td>＝ 累計結餘（本年度累計淨{{ cumNet >= 0 ? '餘絀' : '短絀' }}）</td><td class="num">{{ fmt(cumNet) }}</td>
           </tr>
         </tbody>
       </table>
