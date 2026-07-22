@@ -40,6 +40,7 @@ function pair(debitCode, creditCode, amount, opts = {}) {
 export function deriveAllEntries({
   finance = [],
   receivables = [],
+  payables = [],
   agencyCollections = [],
   manualJournals = [],
   openingBalances = [],
@@ -156,6 +157,35 @@ export function deriveAllEntries({
     // 舊制收款（沒有對應 finance 收款列）的診斷：paid/partial 而查無 finance 列者由呼叫端比對
   }
 
+  // ── 應付帳款：立帳（借費用或代收款／貸應付帳款）───────────
+  // 權責：費用於立帳日（dueDate）認列，付款只沖應付（付款單 sourcePayableId）
+  for (const p of payables) {
+    if (p.status === 'waived') continue
+    if (p.status === 'paid' && p.paidDate && p.paidDate <= baseDate) continue
+    const billDate = p.dueDate || (p.createdAt ? String(p.createdAt).slice(0, 10) : null)
+    if (!afterBase(billDate)) continue
+    const code = p.accountCode || null
+    const amount = p.amount || 0
+    let debitCode, debitPerson
+    if (code === CODES.AGENCY) {
+      // 代收款轉繳：代收義務轉列應付（借 2111 案名／貸 2112 對象）
+      debitCode = CODES.AGENCY; debitPerson = p.sourceRef
+    } else if (code) {
+      debitCode = code; debitPerson = p.payee
+    } else {
+      diagnostics.push({ level: 'warn', message: `應付帳款「${p.sourceRef}/${p.payee}」未設科目，暫以其他支出認列` })
+      debitCode = '5900'; debitPerson = p.payee
+    }
+    push({
+      id: `pay-${p.id}`,
+      date: billDate,
+      sourceType: 'payable',
+      sourceId: p.id,
+      description: `應付立帳：${p.sourceRef}`,
+      lines: pair(debitCode, CODES.PAYABLE, amount, { debitPerson, creditPerson: p.payee, projectId: p.projectId || null }),
+    })
+  }
+
   // ── 4/6/7/8/9/11/12. finance 單據 ──────────────────────────
   for (const f of finance) {
     // 發生日期（權責歸屬）：收入/支出單可另填 occurredDate；收款單與轉帳單
@@ -262,6 +292,18 @@ export function deriveAllEntries({
     }
 
     if (f.type === 'expense') {
+      // 付款單沖應付帳款（不認列費用；費用已於應付立帳時認列）
+      if (f.sourcePayableId) {
+        push({
+          id: `fin-${f.id}`,
+          date: f.date,
+          sourceType: 'payment',
+          sourceId: f.id,
+          description: `付款：${f.item}`,
+          lines: pair(CODES.PAYABLE, fund.code, amount, { debitPerson: f.member || '', creditPerson: fund.person, projectId }),
+        })
+        continue
+      }
       // 代收款付出／轉繳
       if (code === CODES.AGENCY) {
         push({

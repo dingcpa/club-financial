@@ -246,6 +246,28 @@ async function initDB() {
       KEY idx_fy (fy)
     ) CHARACTER SET utf8mb4
   `)
+  // 應付帳款（支出面立帳：借費用或代收款/貸 2112 應付帳款；付款單沖帳）
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS payables (
+      id BIGINT PRIMARY KEY,
+      sourceRef VARCHAR(255) NOT NULL,
+      payee VARCHAR(100) NOT NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      dueDate VARCHAR(20),
+      dueYear VARCHAR(4) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      paidAmount DECIMAL(12,2),
+      paidDate VARCHAR(20),
+      financeId BIGINT,
+      accountCode VARCHAR(10),
+      projectId BIGINT,
+      remark VARCHAR(255),
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      KEY idx_status (status),
+      KEY idx_year (dueYear)
+    ) CHARACTER SET utf8mb4
+  `)
   // 理監事會議程（會議主檔＋議案 JSON：reports 報告事項 / proposals 提案討論）
   await pool.query(`
     CREATE TABLE IF NOT EXISTS meetings (
@@ -271,6 +293,8 @@ async function initDB() {
   await pool.query(`ALTER TABLE finance ADD COLUMN IF NOT EXISTS accountCode VARCHAR(10)`)
   await pool.query(`ALTER TABLE finance ADD COLUMN IF NOT EXISTS projectId BIGINT`)
   await pool.query(`ALTER TABLE finance ADD COLUMN IF NOT EXISTS sourceReceivableId BIGINT`)
+  // 付款單沖應付帳款標記（引擎推導為借應付/貸資金，非費用）
+  await pool.query(`ALTER TABLE finance ADD COLUMN IF NOT EXISTS sourcePayableId BIGINT`)
   // 應收帳款：科目代碼＋權責歸屬期間（取代由名稱正則推期間）
   await pool.query(`ALTER TABLE receivables ADD COLUMN IF NOT EXISTS accountCode VARCHAR(10)`)
   await pool.query(`ALTER TABLE receivables ADD COLUMN IF NOT EXISTS projectId BIGINT`)
@@ -326,6 +350,7 @@ const ACCOUNT_SEED = [
   ['1401', '什項設備', 'asset', null, {}, '音響、旗座等社有財產'],
   // 負債
   ['2111', '代收款', 'liability', null, { isSystem: 1, requiresPerson: 1 }, '代收代付案（EREY、總半年費、金蘭房費…），結案付出時沖銷'],
+  ['2112', '應付帳款', 'liability', null, { isSystem: 1, requiresPerson: 1 }, '應付未付款項（薪資、租金、代收款轉繳…），應付明細表立帳、付款單沖帳'],
   ['2121', '預收社費', 'liability', null, { isSystem: 1 }, '開單之社費先掛此，權責期間內逐月轉列社費收入（引擎自動）'],
   ['2122', '其他預收收入', 'liability', null, { isSystem: 1 }, '活動費等預收款；收入單填期間自動掛此並逐月轉列'],
   ['2131', '暫收款(社友溢繳)', 'liability', null, { isSystem: 1, requiresPerson: 1 }, '社友溢繳待沖抵（按社友明細）'],

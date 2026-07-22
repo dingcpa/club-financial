@@ -2,10 +2,11 @@ import { computed } from 'vue'
 import { deriveAllEntries } from '../accounting/deriveEntries.js'
 
 // 把單據 refs 綁進推導引擎：單據變動 → computed 自動重算全部分錄
-export function useAccounting({ records, receivables, agencyCollections, manualJournals, openingBalances, accounts, appSettings }) {
+export function useAccounting({ records, receivables, payables, agencyCollections, manualJournals, openingBalances, accounts, appSettings }) {
   const derived = computed(() => deriveAllEntries({
     finance: records?.value || [],
     receivables: receivables?.value || [],
+    payables: payables?.value || [],
     agencyCollections: agencyCollections?.value || [],
     manualJournals: manualJournals?.value || [],
     openingBalances: openingBalances?.value || [],

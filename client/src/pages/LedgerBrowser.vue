@@ -295,13 +295,14 @@ function entryPersons(e) {
 
 const SOURCE_LABELS = {
   opening: '期初', receivable: '開單', recognition: '轉列', collection: '收款',
+  payable: '應付立帳', payment: '付款沖帳',
   income: '收入', expense: '支出', transfer: '轉帳', overpayment: '溢收',
   'agency-payout': '代付', manual: '手工', closing: '結轉',
 }
 function sourceLabel(t) { return SOURCE_LABELS[t] || t }
 function sourceColor(t) {
   if (t === 'income' || t === 'collection') return 'success'
-  if (t === 'expense' || t === 'agency-payout') return 'error'
+  if (t === 'expense' || t === 'agency-payout' || t === 'payable' || t === 'payment') return 'error'
   if (t === 'manual') return 'warning'
   if (t === 'recognition' || t === 'closing' || t === 'opening') return 'grey'
   return 'primary'

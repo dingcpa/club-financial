@@ -430,6 +430,19 @@ app.delete('/api/finance/:id', async (req, res) => {
                 );
             }
         }
+        // 刪除付款沖帳單 → 同步回退應付帳款的已付金額與狀態
+        if (rows.length && rows[0].sourcePayableId) {
+            const [pv] = await pool.query('SELECT * FROM payables WHERE id=?', [rows[0].sourcePayableId]);
+            if (pv.length) {
+                const total = parseFloat(pv[0].amount) || 0;
+                const newPaid = Math.max(0, (parseFloat(pv[0].paidAmount) || 0) - (parseFloat(rows[0].amount) || 0));
+                const newStatus = newPaid <= 0 ? 'pending' : (newPaid >= total ? 'paid' : 'partial');
+                await pool.query(
+                    `UPDATE payables SET status=?, paidAmount=?, paidDate=IF(?<=0, NULL, paidDate), financeId=IF(?<=0, NULL, financeId), updatedAt=NOW() WHERE id=?`,
+                    [newStatus, newPaid <= 0 ? null : newPaid, newPaid, newPaid, pv[0].id]
+                );
+            }
+        }
         res.json({ message: 'Record deleted successfully' });
     } catch (e) {
         console.error('Error deleting data:', e);
@@ -1017,6 +1030,240 @@ app.put('/api/receivables/:id/reopen', async (req, res) => {
         res.json(parseReceivable(updated[0]));
     } catch (e) {
         res.status(500).json({ error: 'Failed to reopen receivable' });
+    }
+});
+
+// ─── Payables（應付帳款：立帳→付款單沖帳）───────────────────
+app.get('/api/payables', async (req, res) => {
+    try {
+        const { year, status, payee } = req.query;
+        let sql = 'SELECT * FROM payables WHERE 1=1';
+        const params = [];
+        if (year) { sql += ' AND dueYear=?'; params.push(year); }
+        if (status === 'outstanding') sql += ` AND status IN ('pending','partial')`;
+        else if (status) { sql += ' AND status=?'; params.push(status); }
+        if (payee) { sql += ' AND payee=?'; params.push(payee); }
+        sql += ' ORDER BY dueDate ASC, id ASC';
+        const [rows] = await pool.query(sql, params);
+        res.json(rows.map(parsePayable));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read payables' });
+    }
+});
+
+function parsePayable(row) {
+    return {
+        ...row,
+        amount: parseFloat(row.amount),
+        paidAmount: row.paidAmount != null ? parseFloat(row.paidAmount) : null,
+    };
+}
+
+app.post('/api/payables', async (req, res) => {
+    try {
+        const { sourceRef, payee, amount, dueDate, accountCode, projectId, remark } = req.body || {};
+        if (!sourceRef || !payee) return res.status(400).json({ error: '缺少項目或對象' });
+        if (!await assertUnlocked(res, dueDate)) return;
+        const row = {
+            id: Date.now(),
+            sourceRef, payee,
+            amount: parseFloat(amount) || 0,
+            dueDate: dueDate || null,
+            dueYear: (dueDate && dueDate.substring(0, 4)) || new Date().getFullYear().toString(),
+            status: 'pending',
+            accountCode: accountCode || null,
+            projectId: projectId || null,
+            remark: remark || null,
+        };
+        await pool.query('INSERT INTO payables SET ?', [row]);
+        res.status(201).json(parsePayable(row));
+    } catch (e) {
+        console.error('Error creating payable:', e);
+        res.status(500).json({ error: 'Failed to create payable' });
+    }
+});
+
+app.put('/api/payables/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [rows] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        if (!rows.length) return res.status(404).json({ error: 'Payable not found' });
+        const cur = rows[0];
+        if (cur.status === 'paid' || (parseFloat(cur.paidAmount) || 0) > 0) {
+            return res.status(400).json({ error: '已付款的應付帳款不可編輯，請先恢復' });
+        }
+        const { sourceRef, payee, amount, dueDate, accountCode, projectId, remark } = req.body || {};
+        if (!await assertUnlocked(res, cur.dueDate, dueDate)) return;
+        const updated = {
+            sourceRef:   sourceRef   !== undefined ? sourceRef                : cur.sourceRef,
+            payee:       payee       !== undefined ? payee                    : cur.payee,
+            amount:      amount      !== undefined ? (parseFloat(amount) || 0) : cur.amount,
+            dueDate:     dueDate     !== undefined ? (dueDate || null)        : cur.dueDate,
+            accountCode: accountCode !== undefined ? (accountCode || null)    : cur.accountCode,
+            projectId:   projectId   !== undefined ? (projectId || null)      : cur.projectId,
+            remark:      remark      !== undefined ? (remark || null)         : cur.remark,
+        };
+        updated.dueYear = updated.dueDate ? updated.dueDate.substring(0, 4) : cur.dueYear;
+        await pool.query('UPDATE payables SET ? WHERE id=?', [updated, id]);
+        const [r2] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        res.json(parsePayable(r2[0]));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to update payable' });
+    }
+});
+
+app.delete('/api/payables/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [cur] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        if (cur.length && (parseFloat(cur[0].paidAmount) || 0) > 0) {
+            return res.status(400).json({ error: '已付款的應付帳款不可刪除，請先恢復' });
+        }
+        if (cur.length && !await assertUnlocked(res, cur[0].dueDate)) return;
+        const [result] = await pool.query('DELETE FROM payables WHERE id=?', [id]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Payable not found' });
+        res.json({ message: 'Payable deleted' });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete payable' });
+    }
+});
+
+// 單筆付款（支援部分付款）：產生帶 sourcePayableId 的付款單（借應付/貸資金）
+app.post('/api/payables/:id/pay', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { date, amount, account, remark } = req.body;
+        if (!date || !account) return res.status(400).json({ error: '缺少付款日期或付款帳戶' });
+        if (!await assertUnlocked(res, date)) return;
+        const [rows] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        if (!rows.length) return res.status(404).json({ error: 'Payable not found' });
+        const p = rows[0];
+        if (p.status === 'paid')   return res.status(400).json({ error: '此應付帳款已全額付款' });
+        if (p.status === 'waived') return res.status(400).json({ error: '免付款項不可付款，請先恢復' });
+
+        const total = parseFloat(p.amount) || 0;
+        const already = parseFloat(p.paidAmount) || 0;
+        const remaining = total - already;
+        const entered = parseFloat(amount);
+        const applied = (!entered || entered <= 0) ? remaining : Math.min(entered, remaining);
+        if (!applied) return res.status(400).json({ error: '無可沖抵金額' });
+
+        const financeRecord = {
+            id: Date.now(),
+            type: 'expense',
+            date,
+            item: p.sourceRef,
+            member: p.payee,
+            account,
+            amount: applied,
+            remark: remark || '',
+            startPeriod: null, endPeriod: null, fromAccount: '', toAccount: '',
+            accountCode: p.accountCode || null,
+            projectId: p.projectId || null,
+            sourcePayableId: p.id,
+        };
+        await pool.query('INSERT INTO finance SET ?', [financeRecord]);
+        const newPaid = already + applied;
+        await pool.query(
+            `UPDATE payables SET status=?, paidAmount=?, paidDate=?, financeId=COALESCE(financeId, ?), updatedAt=NOW() WHERE id=?`,
+            [newPaid >= total ? 'paid' : 'partial', newPaid, date, financeRecord.id, id]
+        );
+        const [updated] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        res.json({ payable: parsePayable(updated[0]), financeRecord: parseFinance(financeRecord), applied });
+    } catch (e) {
+        console.error('Error paying payable:', e);
+        res.status(500).json({ error: 'Failed to pay payable' });
+    }
+});
+
+// 批次付款沖帳（付款單勾選多筆應付；依傳入順序沖抵，不足時尾筆列部分付款）
+app.post('/api/payables/settle-batch', async (req, res) => {
+    try {
+        const { date, account, payableIds, paidAmount, remark } = req.body;
+        if (!date || !account || !payableIds?.length) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        if (!await assertUnlocked(res, date)) return;
+        const placeholders = payableIds.map(() => '?').join(',');
+        const [payables] = await pool.query(
+            `SELECT * FROM payables WHERE id IN (${placeholders}) AND status IN ('pending','partial')
+             ORDER BY FIELD(id, ${placeholders})`,
+            [...payableIds, ...payableIds]
+        );
+        let remaining = parseFloat(paidAmount) || 0;
+        const settled = [], partialSettled = [], skipped = [], financeRecords = [];
+        for (let i = 0; i < payables.length; i++) {
+            const p = payables[i];
+            const total = parseFloat(p.amount) || 0;
+            const already = parseFloat(p.paidAmount) || 0;
+            const applied = Math.min(total - already, remaining);
+            if (applied <= 0) { skipped.push(p); continue; }
+            remaining -= applied;
+            const newPaid = already + applied;
+            const fullyPaid = newPaid >= total;
+            const record = {
+                id: Date.now() + i,
+                type: 'expense', date, item: p.sourceRef, member: p.payee, account,
+                amount: applied, remark: remark || '',
+                startPeriod: null, endPeriod: null, fromAccount: '', toAccount: '',
+                accountCode: p.accountCode || null,
+                projectId: p.projectId || null,
+                sourcePayableId: p.id,
+            };
+            await pool.query('INSERT INTO finance SET ?', [record]);
+            await pool.query(
+                `UPDATE payables SET status=?, paidAmount=?, paidDate=?, financeId=?, updatedAt=NOW() WHERE id=?`,
+                [fullyPaid ? 'paid' : 'partial', newPaid, date, record.id, p.id]
+            );
+            financeRecords.push(record);
+            (fullyPaid ? settled : partialSettled).push({ ...p, paidAmount: newPaid });
+        }
+        res.json({
+            settled: settled.map(parsePayable),
+            partialSettled: partialSettled.map(parsePayable),
+            skipped: skipped.map(parsePayable),
+            surplus: Math.round(remaining * 100) / 100,
+            financeRecords: financeRecords.map(parseFinance),
+        });
+    } catch (e) {
+        console.error('Error in payables settle-batch:', e);
+        res.status(500).json({ error: 'Failed to settle payables' });
+    }
+});
+
+// 免付
+app.put('/api/payables/:id/waive', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [rows] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        if (!rows.length) return res.status(404).json({ error: 'Payable not found' });
+        if (rows[0].status !== 'pending') return res.status(400).json({ error: '只有 pending 狀態可免付' });
+        await pool.query(`UPDATE payables SET status='waived', remark=COALESCE(?, remark), updatedAt=NOW() WHERE id=?`,
+            [(req.body || {}).waivedReason || null, id]);
+        const [updated] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        res.json(parsePayable(updated[0]));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to waive payable' });
+    }
+});
+
+// 恢復（撤銷 paid/waived；一併刪除付款單，引擎分錄自動回復）
+app.put('/api/payables/:id/reopen', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const [rows] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        if (!rows.length) return res.status(404).json({ error: 'Payable not found' });
+        if (rows[0].status === 'pending') return res.status(400).json({ error: '已是 pending 狀態' });
+        if (!await assertUnlocked(res, rows[0].dueDate, rows[0].paidDate)) return;
+        await pool.query('DELETE FROM finance WHERE sourcePayableId=?', [id]);
+        await pool.query(
+            `UPDATE payables SET status='pending', paidAmount=NULL, paidDate=NULL, financeId=NULL, updatedAt=NOW() WHERE id=?`,
+            [id]
+        );
+        const [updated] = await pool.query('SELECT * FROM payables WHERE id=?', [id]);
+        res.json(parsePayable(updated[0]));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to reopen payable' });
     }
 });
 

@@ -35,11 +35,41 @@
           </v-col>
         </v-row>
 
+        <!-- 沖銷應付款（應付明細表立帳項目；勾選後由本付款單沖帳） -->
+        <v-card
+          v-if="!editingRecord && outstandingPayables.length"
+          variant="outlined" class="pa-2 pa-sm-3 mb-3" rounded="lg"
+        >
+          <div class="d-flex justify-space-between align-center mb-1">
+            <span class="text-caption font-weight-bold">沖銷應付款（{{ pickedPayables.length }} / {{ outstandingPayables.length }}）</span>
+            <span v-if="pickedPayables.length" class="text-caption text-medium-emphasis">勾選合計 {{ pickedPayablesTotal.toLocaleString() }}</span>
+          </div>
+          <div style="max-height:180px;overflow-y:auto">
+            <div v-for="p in outstandingPayables" :key="p.id" class="d-flex align-center ga-1">
+              <v-checkbox-btn v-model="pickedPayables" :value="p.id" density="compact" />
+              <span class="text-caption flex-grow-1">
+                {{ p.sourceRef }}（{{ p.payee }}｜{{ p.dueDate || '未指定' }}）
+                <v-chip v-if="p.status === 'partial'" size="x-small" color="warning" variant="tonal">已付 {{ (p.paidAmount || 0).toLocaleString() }}</v-chip>
+              </span>
+              <span class="text-caption font-weight-bold">{{ payableRemaining(p).toLocaleString() }}</span>
+            </div>
+          </div>
+          <v-text-field
+            v-if="pickedPayables.length"
+            v-model="payAmount" label="實付金額 (NT$)" type="number"
+            density="compact" variant="outlined" hide-details class="mt-2"
+            hint="低於勾選合計時，依序沖抵、尾筆列部分付款"
+          />
+          <div v-if="pickedPayables.length" class="text-caption text-medium-emphasis mt-1">
+            沖帳分錄：借 應付帳款／貸 付款帳戶（費用已於立帳時認列）。下方支出欄位可留空，或另填直接支出一併儲存。
+          </div>
+        </v-card>
+
         <v-select
           v-model="formData.accountCode"
           label="支出科目"
           :items="acctOptions"
-          density="compact" variant="outlined" required
+          density="compact" variant="outlined" :required="!pickedPayables.length"
           prepend-inner-icon="mdi-book-open-variant"
           class="mb-2"
           @update:model-value="handleAccountChange"
@@ -142,6 +172,10 @@ const updateRecord = inject('updateRecord')
 const deleteRecord = inject('deleteRecord')
 const handleCancelEdit = inject('handleCancelEdit')
 const setActiveTab = inject('setActiveTab')
+const payables = inject('payables')
+const fetchPayables = inject('fetchPayables')
+const settlePayablesBatch = inject('settlePayablesBatch')
+const fetchRecords = inject('fetchRecords')
 
 const currentMonth = new Date().toISOString().substring(0, 7)
 
@@ -156,6 +190,27 @@ const memberOptions = computed(() =>
 
 // 只有「費用科目」可平攤（代收款付出不影響餘絀）
 const isExpenseAccount = computed(() => (formData.value.accountCode || '').startsWith('5'))
+
+// ── 沖銷應付款 ──
+const pickedPayables = ref([])
+const payAmount = ref('')
+
+function payableRemaining(p) {
+  const paid = p.status === 'partial' ? (p.paidAmount || 0) : 0
+  return Math.round((p.amount - paid) * 100) / 100
+}
+const outstandingPayables = computed(() =>
+  (payables?.value || [])
+    .filter(p => p.status === 'pending' || p.status === 'partial')
+    .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+)
+const pickedPayablesTotal = computed(() => {
+  const ids = new Set(pickedPayables.value)
+  return Math.round(outstandingPayables.value
+    .filter(p => ids.has(p.id))
+    .reduce((s, p) => s + payableRemaining(p), 0) * 100) / 100
+})
+watch(pickedPayablesTotal, (v) => { payAmount.value = v ? String(v) : '' })
 
 function makeDefaultForm() {
   return {
@@ -210,8 +265,18 @@ function handleStartPeriodChange(val) {
 }
 
 async function handleSubmit() {
+  const hasDirect = !!(formData.value.accountCode && formData.value.item && parseFloat(formData.value.amount))
+  // 新增模式：可只沖應付款、只直接支出、或兩者並存
+  if (!editingRecord.value && !hasDirect && pickedPayables.value.length) {
+    if ((parseFloat(payAmount.value) || 0) <= 0) {
+      Swal.fire({ icon: 'warning', title: '請輸入實付金額', confirmButtonColor: '#4f46e5' })
+      return
+    }
+    await settlePicked()
+    return
+  }
   if (!formData.value.accountCode) {
-    Swal.fire({ icon: 'warning', title: '請選擇支出科目', confirmButtonColor: '#4f46e5' })
+    Swal.fire({ icon: 'warning', title: '請選擇支出科目，或勾選要沖銷的應付款', confirmButtonColor: '#4f46e5' })
     return
   }
   if (!formData.value.item || !formData.value.amount) return
@@ -234,10 +299,38 @@ async function handleSubmit() {
   if (editingRecord.value) {
     await updateRecord(editingRecord.value.id, payload)
   } else {
+    if (pickedPayables.value.length) await settlePicked({ silent: true })
     await addRecord(payload)
     formData.value = makeDefaultForm()
   }
   pendingAttachments.value = []
+}
+
+async function settlePicked({ silent = false } = {}) {
+  try {
+    const ids = new Set(pickedPayables.value)
+    const payableIds = outstandingPayables.value.filter(p => ids.has(p.id)).map(p => p.id)
+    const result = await settlePayablesBatch({
+      date: formData.value.date,
+      account: formData.value.account,
+      payableIds,
+      paidAmount: parseFloat(payAmount.value) || 0,
+      remark: formData.value.remark || '',
+    })
+    await Promise.all([fetchRecords(), fetchPayables()])
+    pickedPayables.value = []
+    payAmount.value = ''
+    if (!silent) {
+      const parts = [`沖銷應付款 <b>${result.settled.length}</b> 筆`]
+      if (result.partialSettled?.length) parts.push(`部分付款 <b>${result.partialSettled.length}</b> 筆`)
+      if (result.surplus > 0) parts.push(`實付超出 NT$ <b>${result.surplus.toLocaleString()}</b> 未分配`)
+      Swal.fire({ icon: 'success', title: '付款單已儲存', html: parts.join('，'), confirmButtonColor: '#4f46e5' })
+      formData.value = makeDefaultForm()
+    }
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: '沖帳失敗', text: e.message, confirmButtonColor: '#ef4444' })
+    throw e
+  }
 }
 
 async function handleDelete() {

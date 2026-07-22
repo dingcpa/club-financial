@@ -86,6 +86,7 @@ club-financial/
 |--------|------|
 | `finance` | 單據主檔（income/expense/transfer；`accountCode` 科目、`projectId` 專案、`sourceReceivableId` 收款單標記）|
 | `receivables` | 應收帳款（`accountCode`、`periodStart/End` 權責期間、`projectId` 活動；status: pending/partial/paid/waived）|
+| `payables` | ★ 應付帳款（sourceRef 項目/payee 對象/accountCode 5xxx 或 2111/projectId；status 同上；立帳→付款單沖帳）|
 | `accounts` | ★ 會計科目表（二層、isSystem 系統科目、isCash、requiresPerson 人員明細）|
 | `projects` | ★ 活動（原專案類別；收支單據皆可掛，另有 activityDate/location/note 活動屬性）|
 | `activity_registrations` | 活動報名明細（projectId＋memberName UNIQUE；attending/meal/room/busStop/note，統計前端加總）|
@@ -108,6 +109,7 @@ club-financial/
 - **settle-batch 沖抵語意**：納 pending＋partial（以剩餘額）、依傳入順序沖抵，`applied=min(剩餘額,可分配額)`——可分配額不足時尾筆列部分收款（partial）；回傳含 `partialSettled`。負數應收（補助抵減）**優先整筆沖抵**，其負額回充可分配額後才沖正數帳款。`/receivables/outstanding/:memberName` 同樣納 partial 並附 `remaining`。
 - **reopen / 取消收款 / 刪除收款單**：連動刪除收款單或回退應收狀態。
 - **開單為明確動作**：新增帳款類別或社友「不再」自動全員開單；由應收帳款頁批次產生（含季度社費快速開單，每月金額看 `dues.monthlyAmount`）。
+- **應付帳款（支出面權責）**：應付明細表立帳＝費用認列日（借 5xxx 費用或 2111 代收款轉繳／貸 2112 應付帳款-對象）；付款單沖帳（`sourcePayableId`）＝借 2112／貸資金，不再認列費用。settle-batch 依序沖抵、尾筆 partial；reopen/刪除付款單自動回退。
 - **資金帳戶字彙**：`account/fromAccount/toAccount` 只能是銀行名（`一銀帳戶`）或 `經手人:<姓名>`（→1121 經手人往來按人明細）。
 - **雙日期**：finance 可填 `occurredDate`（發生日期）；引擎對收入/支出單以發生日期入帳（權責），收款單/轉帳單一律用單據日期（資金移動）。
 - **年度關帳**：`accounting.lockDate`（含）以前的 finance/手工傳票/應收異動一律 400 拒絕；年度損益結轉與 BS 承轉由引擎自動處理，關帳只是鎖唯讀。
@@ -123,6 +125,7 @@ club-financial/
 | `/dues-settings` | 帳款類別（accountCode/periodMonths）|
 | `/agency-collections` | 代收代付＋`/:id/pay`（產生收款單）、`/:id/close`（payAccount 產生付出支出單）|
 | `/receivables` | 應收 CRUD＋`/batch-generate`（accountCode/period）、`/:id/collect`（部分收款）、`/:id/waive`、`/:id/reopen`、`/settle-batch` |
+| `/payables` | ★ 應付 CRUD＋`/:id/pay`（部分付款）、`/settle-batch`、`/:id/waive`、`/:id/reopen`（?status=outstanding 查未付）|
 | `/accounts`、`/projects` | ★ 科目表 / 活動 CRUD（系統科目保護、已用檢查；projects 含 activityDate/location/note）|
 | `/projects/:id/registrations` | 活動報名明細（GET / PUT 整批 upsert，不在名單者刪除）|
 | `/receipts` | 收據（GET ?fy=&member=、POST 取號、PUT /:id/void 作廢）|
@@ -148,7 +151,7 @@ club-financial/
 
 ### 左側選單（App.vue，七組；空群組自動隱藏）
 
-收支單據（收款單/付款單/調撥單/手工傳票）→ 報表查詢（月報/BS/CF/預算；viewer 僅此組）→ 帳冊查詢（繳費總覽/帳款明細表/預收明細表/代收付明細表/分類帳/日記帳）→ 社務管理（紅箱統計/Line請款/開立收據/活動管理/會議議程/社刊管理/行事曆）→ 基本設定（名冊/科目類別/期初/關帳）→ 系統管理（帳號）。
+收支單據（收款單/付款單/調撥單/手工傳票）→ 報表查詢（月報/BS/CF/預算；viewer 僅此組）→ 帳冊查詢（繳費總覽/帳款明細表/應付明細表/預收明細表/代收付明細表/分類帳/日記帳）→ 社務管理（紅箱統計/Line請款/開立收據/活動管理/會議議程/社刊管理/行事曆）→ 基本設定（名冊/科目類別/期初/關帳）→ 系統管理（帳號）。
 查詢收/付/調撥單選單項已移除，入口改為各表單頁的「歷史單據」按鈕（pageMap 保留 income-list 等 key）。「分類帳」「日記帳」共用 LedgerBrowser，依 activeTab 開對 tab（試算表為第三 tab）。
 
 ### 頁面元件（`client/src/pages/`）
@@ -165,9 +168,10 @@ club-financial/
 | `ManualJournal.vue` | ★ 手工傳票 |
 | `OpeningBalance.vue` | ★ 期初餘額設定（admin）|
 | `IncomeForm.vue` | ★ 收款單（兩用：選社友帶出未收帳款勾選沖銷＋直接認列收入多列可混搭；實收可下修尾筆 partial、溢收掛 2131；跨月分攤 UI 已移除，編輯舊分攤單期間唯讀保留）|
-| `ExpenseForm.vue` | 付款單（科目分群、發生日期、附件、預付平攤）|
+| `ExpenseForm.vue` | 付款單（兩用：勾選未付應付款沖帳＋直接支出可並存；科目分群、發生日期、附件、預付平攤）|
 | `TransferForm.vue` | 調撥單（資產科目間移轉：存入銀行、歸墊；可附件）|
 | `ReceivablesSummary.vue` | 帳款明細表（季度快速開單、批次產生、收款/免繳/恢復、收款對帳含 partial、明細↔總帳勾稽；產生附表＝項目統計列印；催繳已移至 Line請款）|
+| `PayablesSummary.vue` | ★ 應付明細表（立帳/付款/免付/恢復/刪除、篩選、未付合計↔2112 勾稽）|
 | `PrepaidDetail.vue` | 預收明細表（2121/2122 按對象：期初/新增/轉列/期末，展開逐筆、drill 分類帳；年度＋月份基準日選擇，期末與同基準日 BS 勾稽；產生附表列印）|
 | `AgencyCollection.vue` | 代收付明細表（收付進度＋每案 2111 勾稽＋總勾稽表＝BS 代收款；產生附表列印）|
 | `RedboxStats.vue` | 紅箱統計（4102 社友×月份交叉表＋項目篩選；LINE 未結算場次提醒）|

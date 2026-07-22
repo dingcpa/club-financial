@@ -10,6 +10,7 @@ export const CODES = {
   HANDLER: '1121',         // 經手人往來（person=經手人）
   PREPAID_EXPENSE: '1131', // 預付費用
   AGENCY: '2111',          // 代收款（person=代收案名）
+  PAYABLE: '2112',         // 應付帳款（person=對象/受款人）
   UNEARNED_DUES: '2121',   // 預收社費
   UNEARNED_OTHER: '2122',  // 其他預收收入
   TEMP_RECEIPT: '2131',    // 暫收款(社友溢繳)（person=社友）

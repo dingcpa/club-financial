@@ -101,6 +101,7 @@ import { useMembers } from './composables/useMembers.js'
 import { useDues } from './composables/useDues.js'
 import { useAgencyCollections } from './composables/useAgencyCollections.js'
 import { useReceivables } from './composables/useReceivables.js'
+import { usePayables } from './composables/usePayables.js'
 import { useAccounts } from './composables/useAccounts.js'
 import { useProjects } from './composables/useProjects.js'
 import { useAppSettings } from './composables/useAppSettings.js'
@@ -134,6 +135,7 @@ import LineBilling from './pages/LineBilling.vue'
 import ReceiptIssue from './pages/ReceiptIssue.vue'
 import ActivityManagement from './pages/ActivityManagement.vue'
 import MeetingAgenda from './pages/MeetingAgenda.vue'
+import PayablesSummary from './pages/PayablesSummary.vue'
 import ClubJournal from './pages/ClubJournal.vue'
 import CalendarPage from './pages/CalendarPage.vue'
 import ClosingWizard from './pages/ClosingWizard.vue'
@@ -155,6 +157,7 @@ const { members, memLoading, fetchMembers, addMember: apiAddMember, updateMember
 const { duesSettings, fetchDuesSettings, addDuesSetting, updateDuesSetting, deleteDuesSetting } = useDues()
 const { agencyCollections, agencyLoading, fetchAgencyCollections, createCollection, recordPayment, removePayment, closeCollection, deleteCollection } = useAgencyCollections()
 const { receivables, recLoading, fetchReceivables, fetchOutstanding, settleBatch, waiveReceivable, reopenReceivable, batchGenerate, createReceivable, updateReceivable, deleteReceivable, collectReceivable } = useReceivables()
+const { payables, payLoading, fetchPayables, createPayable, updatePayable, deletePayable, payPayable, settlePayablesBatch, waivePayable, reopenPayable } = usePayables()
 const { accounts, fetchAccounts, addAccount, updateAccount, deleteAccount } = useAccounts()
 const { projects, fetchProjects, addProject, updateProject, deleteProject } = useProjects()
 const { appSettings, fetchAppSettings, saveAppSettings } = useAppSettings()
@@ -165,7 +168,7 @@ const { budgets, fetchBudgets, saveBudgets } = useBudgets()
 const { attachmentsMeta, fetchAttachmentsMeta, getAttachmentData, deleteAttachment } = useAttachments()
 
 // 分錄推導引擎：所有帳簿與報表的資料源
-const accounting = useAccounting({ records, receivables, agencyCollections, manualJournals, openingBalances, accounts, appSettings })
+const accounting = useAccounting({ records, receivables, payables, agencyCollections, manualJournals, openingBalances, accounts, appSettings })
 const drillContext = ref(null)
 
 // ----- 導覽選單定義（七組） -----
@@ -184,6 +187,7 @@ const reportItems = [
 const bookItems = [
   { tab: 'dues', icon: 'mdi-format-list-bulleted', title: '社友繳費總覽' },
   { tab: 'receivables', icon: 'mdi-file-document-check', title: '帳款明細表' },
+  { tab: 'payables', icon: 'mdi-file-document-minus', title: '應付明細表' },
   { tab: 'prepaid-detail', icon: 'mdi-clock-plus-outline', title: '預收明細表' },
   { tab: 'agency', icon: 'mdi-hand-coin', title: '代收付明細表' },
   { tab: 'ledger', icon: 'mdi-notebook-outline', title: '分類帳' },
@@ -226,6 +230,7 @@ const pageMap = {
   'members': MemberList,
   'agency': AgencyCollection,
   'receivables': ReceivablesSummary,
+  'payables': PayablesSummary,
   'prepaid-detail': PrepaidDetail,
   'redbox-stats': RedboxStats,
   'line-billing': LineBilling,
@@ -400,6 +405,16 @@ provide('createReceivable', createReceivable)
 provide('updateReceivable', updateReceivable)
 provide('deleteReceivable', deleteReceivable)
 provide('collectReceivable', collectReceivable)
+provide('payables', payables)
+provide('payLoading', payLoading)
+provide('fetchPayables', fetchPayables)
+provide('createPayable', createPayable)
+provide('updatePayable', updatePayable)
+provide('deletePayable', deletePayable)
+provide('payPayable', payPayable)
+provide('settlePayablesBatch', settlePayablesBatch)
+provide('waivePayable', waivePayable)
+provide('reopenPayable', reopenPayable)
 provide('accounts', accounts)
 provide('fetchAccounts', fetchAccounts)
 provide('addAccount', addAccount)
@@ -445,7 +460,7 @@ watch(isAuthenticated, (val) => {
   if (val) {
     // 分錄推導引擎需要全量 receivables（不限年度）
     Promise.all([
-      fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections(), fetchReceivables(),
+      fetchRecords(), fetchMembers(), fetchDuesSettings(), fetchAgencyCollections(), fetchReceivables(), fetchPayables(),
       fetchAccounts(), fetchProjects(), fetchAppSettings(), fetchManualJournals(), fetchOpeningBalances(),
       fetchBankReconciliations(), fetchBudgets(), fetchAttachmentsMeta(),
     ])

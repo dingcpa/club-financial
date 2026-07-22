@@ -11,6 +11,7 @@ const pool = mysql.createPool({
 const num = v => (v == null ? null : parseFloat(v))
 const [finance] = await pool.query('SELECT * FROM finance')
 const [receivables] = await pool.query('SELECT * FROM receivables')
+const [payablesRows] = await pool.query('SELECT * FROM payables').catch(() => [[]])
 const [accounts] = await pool.query('SELECT * FROM accounts')
 const [obs] = await pool.query('SELECT * FROM opening_balances')
 const [settingsRows] = await pool.query('SELECT * FROM app_settings')
@@ -21,8 +22,9 @@ const fin = finance.map(f => ({ ...f, amount: num(f.amount) }))
 const rcv = receivables.map(r => ({ ...r, amount: num(r.amount), paidAmount: num(r.paidAmount) }))
 const ob = obs.map(o => ({ ...o, debit: num(o.debit), credit: num(o.credit) }))
 
+const payables = payablesRows.map(p => ({ ...p, amount: num(p.amount), paidAmount: num(p.paidAmount) }))
 const { entries, diagnostics } = deriveAllEntries({
-  finance: fin, receivables: rcv, agencyCollections: [], manualJournals: [],
+  finance: fin, receivables: rcv, payables, agencyCollections: [], manualJournals: [],
   openingBalances: ob, accounts, settings,
 })
 
