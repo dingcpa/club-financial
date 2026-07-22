@@ -8,7 +8,7 @@
       <v-card-title class="d-flex flex-wrap justify-space-between align-center pa-3 pa-sm-4 ga-2">
         <div class="d-flex align-center ga-2">
           <v-icon color="primary">mdi-file-document-check</v-icon>
-          <span class="text-body-1 text-sm-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 帳款明細表</span>
+          <span class="text-body-1 text-sm-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 應收明細表</span>
         </div>
         <div class="d-flex flex-wrap ga-2 align-center">
           <v-btn color="primary" variant="tonal" prepend-icon="mdi-printer" size="small" @click="printReport">產生附表</v-btn>
@@ -192,7 +192,7 @@
     <!-- 列印附表：項目統計視角 -->
     <PrintSheet>
       <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
-      <div class="print-title">帳款明細表（項目統計）</div>
+      <div class="print-title">應收明細表（項目統計）</div>
       <div class="print-meta">民國 {{ toMinguoYear(selectedYear) }} 年度　・　製表日 {{ toMinguoDate(todayStr()) }}　・　幣別：新臺幣 NT$</div>
       <table>
         <thead>

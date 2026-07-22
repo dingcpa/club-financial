@@ -258,7 +258,7 @@
         <!-- 附表一：帳款明細統計 -->
         <div style="page-break-before:always">
           <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
-          <div class="print-title">附表一　帳款明細表（項目統計）</div>
+          <div class="print-title">附表一　應收明細表（項目統計）</div>
           <div class="print-meta">民國 {{ reportYearMinguo }} 年度　・　幣別：新臺幣 NT$</div>
           <table>
             <thead>

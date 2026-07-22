@@ -186,7 +186,7 @@ const reportItems = [
 ]
 const bookItems = [
   { tab: 'dues', icon: 'mdi-format-list-bulleted', title: '社友繳費總覽' },
-  { tab: 'receivables', icon: 'mdi-file-document-check', title: '帳款明細表' },
+  { tab: 'receivables', icon: 'mdi-file-document-check', title: '應收明細表' },
   { tab: 'payables', icon: 'mdi-file-document-minus', title: '應付明細表' },
   { tab: 'prepaid-detail', icon: 'mdi-clock-plus-outline', title: '預收明細表' },
   { tab: 'agency', icon: 'mdi-hand-coin', title: '代收付明細表' },
