@@ -124,6 +124,8 @@ export function balanceSheet(entries, acctByCode, { asOf } = {}) {
   }
 
   const assets = rowsOf('asset')
+  // 現金（1105）列示於最前，其餘依代碼序
+  assets.sort((a, b) => ((a.code === '1105' ? 0 : 1) - (b.code === '1105' ? 0 : 1)) || a.code.localeCompare(b.code))
   if (handlerAR) assets.push({ code: CODES.HANDLER, name: '其他應收款(經手人)', amount: handlerAR, drill: { accountCode: CODES.HANDLER } })
   const liabilities = rowsOf('liability')
   if (handlerAP) liabilities.push({ code: `${CODES.HANDLER}-AP`, name: '其他應付款(經手人)', amount: handlerAP, drill: { accountCode: CODES.HANDLER } })

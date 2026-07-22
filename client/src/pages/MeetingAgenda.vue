@@ -216,11 +216,11 @@
               <div class="amount" :style="`color:${monthlyPL.net >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(monthlyPL.net) }}</div>
             </div>
             <div class="print-card" style="border-left-color:#1d4ed8">
-              <div class="label">＋ 上月結餘（年度 7/1 起累計至上月底）</div>
+              <div class="label">＋ 上期結餘（本期期初權益）</div>
               <div class="amount" :style="`color:${monthlyPL.prevCumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(monthlyPL.prevCumNet) }}</div>
             </div>
             <div class="print-card" style="border-left-color:#1d4ed8">
-              <div class="label">＝ 累計結餘</div>
+              <div class="label">＝ 累計結餘（＝BS 累積餘絀＋本期餘絀）</div>
               <div class="amount" :style="`color:${monthlyPL.cumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(monthlyPL.cumNet) }}</div>
             </div>
           </div>
@@ -231,28 +231,35 @@
           <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
           <div class="print-title">資產負債表</div>
           <div class="print-meta">基準日 {{ toMinguoDate(asOf) }}　・　幣別：新臺幣 NT$</div>
-          <div class="print-section-title">資產</div>
-          <table>
-            <tbody>
-              <tr v-for="r in bs.assets" :key="r.code"><td>{{ r.name }}</td><td class="num" style="width:140px">{{ fmt(r.amount) }}</td></tr>
-              <tr class="total"><td>資產合計</td><td class="num">{{ fmt(bs.totalAssets) }}</td></tr>
-            </tbody>
-          </table>
-          <div class="print-section-title">負債</div>
-          <table>
-            <tbody>
-              <tr v-for="r in bs.liabilities" :key="r.code"><td>{{ r.name }}</td><td class="num" style="width:140px">{{ fmt(r.amount) }}</td></tr>
-              <tr v-if="!bs.liabilities.length"><td colspan="2">（無負債）</td></tr>
-              <tr class="total"><td>負債合計</td><td class="num">{{ fmt(bs.totalLiabilities) }}</td></tr>
-            </tbody>
-          </table>
-          <div class="print-section-title">權益</div>
-          <table>
-            <tbody>
-              <tr v-for="r in bs.equity" :key="r.code"><td>{{ r.name }}</td><td class="num" style="width:140px">{{ fmt(r.amount) }}</td></tr>
-              <tr class="total"><td>負債及權益合計</td><td class="num">{{ fmt(bs.totalLiabilities + bs.totalEquity) }}</td></tr>
-            </tbody>
-          </table>
+          <div class="print-cols">
+            <div>
+              <div class="print-section-title">資產</div>
+              <table>
+                <tbody>
+                  <tr v-for="r in bs.assets" :key="r.code"><td>{{ r.name }}</td><td class="num" style="width:110px">{{ fmt(r.amount) }}</td></tr>
+                  <tr class="total"><td>資產合計</td><td class="num">{{ fmt(bs.totalAssets) }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <div class="print-section-title">負債</div>
+              <table>
+                <tbody>
+                  <tr v-for="r in bs.liabilities" :key="r.code"><td>{{ r.name }}</td><td class="num" style="width:110px">{{ fmt(r.amount) }}</td></tr>
+                  <tr v-if="!bs.liabilities.length"><td colspan="2">（無負債）</td></tr>
+                  <tr class="total"><td>負債合計</td><td class="num">{{ fmt(bs.totalLiabilities) }}</td></tr>
+                </tbody>
+              </table>
+              <div class="print-section-title">權益</div>
+              <table>
+                <tbody>
+                  <tr v-for="r in bs.equity" :key="r.code"><td>{{ r.name }}</td><td class="num" style="width:110px">{{ fmt(r.amount) }}</td></tr>
+                  <tr class="total"><td>權益合計</td><td class="num">{{ fmt(bs.totalEquity) }}</td></tr>
+                  <tr class="total"><td>負債及權益合計</td><td class="num">{{ fmt(bs.totalLiabilities + bs.totalEquity) }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- 附表一：帳款明細統計 -->
@@ -456,18 +463,23 @@ const reportYearMinguo = computed(() => toMinguoYear(reportYm.value.slice(0, 4))
 const monthlyPL = computed(() => {
   const from = `${reportYm.value}-01`
   const inc = new Map(), exp = new Map()
-  const fyStart = `${reportFy.value}-07-01`
+  // 上期結餘＝本期期初權益（期初累積餘絀＋基準日後至上月底之累計損益）
   let prevCumNet = 0
   for (const e of entries.value) {
     if (e.sourceType === 'closing') continue
     for (const l of e.lines) {
       const a = acctByCode.value[l.accountCode]
-      if (!a || (a.type !== 'income' && a.type !== 'expense')) continue
+      if (!a) continue
+      if (a.type === 'equity') {
+        if (e.date < from) prevCumNet += (l.credit || 0) - (l.debit || 0)
+        continue
+      }
+      if (a.type !== 'income' && a.type !== 'expense') continue
       const signed = a.type === 'income' ? (l.credit || 0) - (l.debit || 0) : (l.debit || 0) - (l.credit || 0)
       if (e.date >= from && e.date <= asOf.value) {
         const m = a.type === 'income' ? inc : exp
         m.set(l.accountCode, r2((m.get(l.accountCode) || 0) + signed))
-      } else if (e.date >= fyStart && e.date < from) {
+      } else if (e.date < from) {
         prevCumNet += a.type === 'income' ? signed : -signed
       }
     }

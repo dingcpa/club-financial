@@ -182,51 +182,57 @@
       <div class="print-title">資產負債表</div>
       <div class="print-meta">基準日 {{ toMinguoDate(asOf) }}　・　幣別：新臺幣 NT$　・　{{ bs.balanced ? '借貸平衡' : '（警告：借貸不平衡）' }}</div>
 
-      <div class="print-section-title">資產</div>
-      <table>
-        <tbody>
-          <tr v-for="row in bs.assets" :key="row.code">
-            <td>{{ row.name }}</td>
-            <td class="num" style="width:140px">{{ row.amount.toLocaleString() }}</td>
-          </tr>
-          <template v-for="d in handlerAR" :key="'ar-' + d.person">
-            <tr>
-              <td style="padding-left:22px">經手人往來－{{ d.person }}</td>
-              <td class="num">{{ d.amount.toLocaleString() }}</td>
-            </tr>
-          </template>
-          <tr class="total"><td>資產合計</td><td class="num">{{ bs.totalAssets.toLocaleString() }}</td></tr>
-        </tbody>
-      </table>
-
-      <div class="print-section-title">負債</div>
-      <table>
-        <tbody>
-          <tr v-for="row in bs.liabilities" :key="row.code">
-            <td>{{ row.name }}</td>
-            <td class="num" style="width:140px">{{ row.amount.toLocaleString() }}</td>
-          </tr>
-          <template v-for="d in handlerAP" :key="'ap-' + d.person">
-            <tr>
-              <td style="padding-left:22px">經手人往來－{{ d.person }}</td>
-              <td class="num">{{ (-d.amount).toLocaleString() }}</td>
-            </tr>
-          </template>
-          <tr v-if="!bs.liabilities.length"><td colspan="2">（無負債）</td></tr>
-          <tr class="total"><td>負債合計</td><td class="num">{{ bs.totalLiabilities.toLocaleString() }}</td></tr>
-        </tbody>
-      </table>
-
-      <div class="print-section-title">權益</div>
-      <table>
-        <tbody>
-          <tr v-for="row in bs.equity" :key="row.code">
-            <td>{{ row.name }}</td>
-            <td class="num" style="width:140px">{{ row.amount.toLocaleString() }}</td>
-          </tr>
-          <tr class="total"><td>負債及權益合計</td><td class="num">{{ (bs.totalLiabilities + bs.totalEquity).toLocaleString() }}</td></tr>
-        </tbody>
-      </table>
+      <!-- 左資產、右負債＋權益 -->
+      <div class="print-cols">
+        <div>
+          <div class="print-section-title">資產</div>
+          <table>
+            <tbody>
+              <tr v-for="row in bs.assets" :key="row.code">
+                <td>{{ row.name }}</td>
+                <td class="num" style="width:110px">{{ row.amount.toLocaleString() }}</td>
+              </tr>
+              <template v-for="d in handlerAR" :key="'ar-' + d.person">
+                <tr>
+                  <td style="padding-left:18px">經手人往來－{{ d.person }}</td>
+                  <td class="num">{{ d.amount.toLocaleString() }}</td>
+                </tr>
+              </template>
+              <tr class="total"><td>資產合計</td><td class="num">{{ bs.totalAssets.toLocaleString() }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="print-section-title">負債</div>
+          <table>
+            <tbody>
+              <tr v-for="row in bs.liabilities" :key="row.code">
+                <td>{{ row.name }}</td>
+                <td class="num" style="width:110px">{{ row.amount.toLocaleString() }}</td>
+              </tr>
+              <template v-for="d in handlerAP" :key="'ap-' + d.person">
+                <tr>
+                  <td style="padding-left:18px">經手人往來－{{ d.person }}</td>
+                  <td class="num">{{ (-d.amount).toLocaleString() }}</td>
+                </tr>
+              </template>
+              <tr v-if="!bs.liabilities.length"><td colspan="2">（無負債）</td></tr>
+              <tr class="total"><td>負債合計</td><td class="num">{{ bs.totalLiabilities.toLocaleString() }}</td></tr>
+            </tbody>
+          </table>
+          <div class="print-section-title">權益</div>
+          <table>
+            <tbody>
+              <tr v-for="row in bs.equity" :key="row.code">
+                <td>{{ row.name }}</td>
+                <td class="num" style="width:110px">{{ row.amount.toLocaleString() }}</td>
+              </tr>
+              <tr class="total"><td>權益合計</td><td class="num">{{ bs.totalEquity.toLocaleString() }}</td></tr>
+              <tr class="total"><td>負債及權益合計</td><td class="num">{{ (bs.totalLiabilities + bs.totalEquity).toLocaleString() }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div class="print-section-title">銀行存款核對</div>
       <table>

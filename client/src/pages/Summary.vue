@@ -147,16 +147,16 @@
           </v-col>
           <v-col cols="12" sm="4" style="border-right:1px solid #e2e8f0">
             <div class="pa-2">
-              <div class="text-caption">＋ 上月結餘</div>
+              <div class="text-caption">＋ 上期結餘</div>
               <div class="text-h6 font-weight-bold" :style="`color:${prevCumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(prevCumNet) }}</div>
-              <div class="text-caption text-medium-emphasis">年度 7/1 起累計至上月底</div>
+              <div class="text-caption text-medium-emphasis">本期期初權益（期初累積餘絀＋歷月累計）</div>
             </div>
           </v-col>
           <v-col cols="12" sm="4">
             <div class="pa-2">
               <div class="text-caption">＝ 累計結餘</div>
               <div class="text-h6 font-weight-bold" :style="`color:${cumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(cumNet) }}</div>
-              <div class="text-caption text-medium-emphasis">本年度累計淨{{ cumNet >= 0 ? '餘絀' : '短絀' }}</div>
+              <div class="text-caption text-medium-emphasis">＝資產負債表 累積餘絀＋本期餘絀</div>
             </div>
           </v-col>
         </v-row>
@@ -240,14 +240,14 @@
           <div class="caption">收入 {{ fmt(totalIncome) }} − 支出 {{ fmt(totalExpense) }}</div>
         </div>
         <div class="print-card" style="border-left-color:#1d4ed8">
-          <div class="label">＋ 上月結餘</div>
+          <div class="label">＋ 上期結餘</div>
           <div class="amount" :style="`color:${prevCumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(prevCumNet) }}</div>
-          <div class="caption">年度 7/1 起累計至上月底</div>
+          <div class="caption">本期期初權益（期初累積餘絀＋歷月累計）</div>
         </div>
         <div class="print-card" style="border-left-color:#1d4ed8">
           <div class="label">＝ 累計結餘</div>
           <div class="amount" :style="`color:${cumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(cumNet) }}</div>
-          <div class="caption">本年度累計淨{{ cumNet >= 0 ? '餘絀' : '短絀' }}</div>
+          <div class="caption">＝資產負債表 累積餘絀＋本期餘絀</div>
         </div>
       </div>
 
@@ -381,19 +381,18 @@ const totalIncome = computed(() => r2(incomeSections.value.reduce((s, x) => s + 
 const totalExpense = computed(() => r2(expenseGroups.value.reduce((s, x) => s + x.amount, 0)))
 const net = computed(() => r2(totalIncome.value - totalExpense.value))
 
-// 上月結餘：扶輪年度 7/1 起累計至上月底的淨餘絀（7 月為 0，每年度歸零）
+// 上期結餘＝本期期初權益（期初累積餘絀＋基準日後至上月底之累計損益）
+// 累計結餘＝上期結餘＋本月結餘＝資產負債表（月底）之累積餘絀＋本期餘絀
 const prevCumNet = computed(() => {
-  const fyStart = `${selectedFy.value}-07-01`
   const end = monthFrom.value
-  if (end <= fyStart) return 0
   let acc = 0
   for (const e of entries.value) {
-    if (e.sourceType === 'closing') continue
-    if (e.date < fyStart || e.date >= end) continue
+    if (e.sourceType === 'closing') continue // 結轉僅在權益內移轉，不影響累計
+    if (e.date >= end) continue
     for (const l of e.lines) {
       const acct = acctByCode.value[l.accountCode]
       if (!acct) continue
-      if (acct.type === 'income') acc += (l.credit || 0) - (l.debit || 0)
+      if (acct.type === 'income' || acct.type === 'equity') acc += (l.credit || 0) - (l.debit || 0)
       else if (acct.type === 'expense') acc -= (l.debit || 0) - (l.credit || 0)
     }
   }
