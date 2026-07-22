@@ -1,0 +1,104 @@
+/* 共用列印機制：頁面把列印版 markup 放進 <PrintSheet>（Teleport 到 body），
+   按鈕呼叫 window.print() → 瀏覽器列印/另存 PDF。螢幕上永不顯示。 */
+.print-sheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  /* 隱藏整個應用（含 Vuetify overlay 容器），只留列印版 */
+  .v-application,
+  .v-overlay-container {
+    display: none !important;
+  }
+
+  .print-sheet {
+    display: block !important;
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    color: #000;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .print-sheet .print-org {
+    font-size: 13px;
+    font-weight: bold;
+  }
+  .print-sheet .print-title {
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+    margin: 4px 0;
+  }
+  .print-sheet .print-meta {
+    font-size: 11px;
+    color: #333;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .print-sheet table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+    page-break-inside: auto;
+  }
+  .print-sheet th,
+  .print-sheet td {
+    border: 1px solid #888;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .print-sheet th {
+    background: #eee;
+    text-align: left;
+  }
+  .print-sheet td.num,
+  .print-sheet th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .print-sheet tr.group td {
+    background: #f3f4f6;
+    font-weight: bold;
+  }
+  .print-sheet tr.total td {
+    font-weight: bold;
+    background: #fafafa;
+  }
+  .print-sheet .print-section-title {
+    font-size: 13px;
+    font-weight: bold;
+    margin: 8px 0 4px;
+  }
+  .print-sheet .print-footer {
+    font-size: 10px;
+    color: #444;
+    margin-top: 8px;
+  }
+  .print-sheet .print-sign {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 28px;
+    font-size: 12px;
+  }
+  .print-sheet .watermark-void {
+    position: relative;
+  }
+  .print-sheet .watermark-void::after {
+    content: "作 廢";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 64px;
+    color: rgba(220, 38, 38, 0.25);
+    transform: rotate(-20deg);
+    pointer-events: none;
+  }
+}

@@ -14,7 +14,7 @@
               報表期間　民國 {{ minguoLabel }}（{{ selectedMonth }}）　・　幣別：新臺幣 NT$　・　認列基礎：權責發生制（分攤項目按月平攤）
             </div>
           </div>
-          <div class="d-flex ga-2">
+          <div class="d-flex flex-wrap ga-2 align-center">
             <v-select
               v-model="selectedFy" :items="fyOptions" density="compact" variant="outlined" hide-details
               style="min-width:130px"
@@ -23,6 +23,7 @@
               v-model="selectedMonth" :items="monthOptions" density="compact" variant="outlined" hide-details
               style="min-width:96px"
             />
+            <v-btn color="primary" variant="tonal" prepend-icon="mdi-printer" @click="printReport">產生 PDF / 列印</v-btn>
           </div>
         </div>
       </v-card-text>
@@ -79,8 +80,9 @@
               </thead>
               <tbody>
                 <template v-for="sec in incomeSections" :key="sec.code">
-                  <tr style="background:#eff6ff">
-                    <td colspan="2" class="text-caption font-weight-bold" style="color:#1d4ed8">{{ sec.name }}</td>
+                  <tr style="background:#eff6ff" :style="sec.amount ? 'cursor:pointer' : ''" @click="sec.amount && drillTo(sec.code)">
+                    <td class="text-caption font-weight-bold" style="color:#1d4ed8">{{ sec.name }}</td>
+                    <td class="text-right text-caption font-weight-bold" style="color:#1d4ed8">{{ fmt(sec.amount) }}</td>
                   </tr>
                   <tr
                     v-for="it in sec.items" :key="it.label"
@@ -90,10 +92,6 @@
                   >
                     <td class="text-caption pl-6">{{ it.label }}</td>
                     <td class="text-right text-caption" :style="it.amount ? 'color:#15803d' : ''">{{ fmt(it.amount) }}</td>
-                  </tr>
-                  <tr style="background:#f0fdf4" :style="sec.amount ? 'cursor:pointer' : ''" @click="sec.amount && drillTo(sec.code)">
-                    <td class="text-caption font-weight-bold pl-6">{{ sec.name }} 小計</td>
-                    <td class="text-right text-caption font-weight-bold" style="color:#15803d">{{ fmt(sec.amount) }}</td>
                   </tr>
                 </template>
               </tbody>
@@ -117,8 +115,9 @@
               </thead>
               <tbody>
                 <template v-for="grp in expenseGroups" :key="grp.code">
-                  <tr style="background:#eff6ff">
-                    <td colspan="2" class="text-caption font-weight-bold" style="color:#1d4ed8">{{ grp.name }}</td>
+                  <tr style="background:#eff6ff" :style="grp.amount ? 'cursor:pointer' : ''" @click="grp.amount && drillTo(grp.items[0]?.code || grp.code)">
+                    <td class="text-caption font-weight-bold" style="color:#1d4ed8">{{ grp.name }}</td>
+                    <td class="text-right text-caption font-weight-bold" style="color:#1d4ed8">{{ fmt(grp.amount) }}</td>
                   </tr>
                   <tr
                     v-for="it in grp.items" :key="it.code"
@@ -129,10 +128,6 @@
                     <td class="text-caption pl-6">{{ it.name }}</td>
                     <td class="text-right text-caption" :style="it.amount ? 'color:#b91c1c' : ''">{{ fmt(it.amount) }}</td>
                   </tr>
-                  <tr style="background:#fef2f2" :style="grp.amount ? 'cursor:pointer' : ''" @click="grp.amount && drillTo(grp.items[0]?.code || grp.code)">
-                    <td class="text-caption font-weight-bold pl-6">{{ grp.name }} 小計</td>
-                    <td class="text-right text-caption font-weight-bold" style="color:#b91c1c">{{ fmt(grp.amount) }}</td>
-                  </tr>
                 </template>
               </tbody>
             </v-table>
@@ -140,28 +135,28 @@
         </v-col>
       </v-row>
 
-      <!-- 底部合計條 -->
+      <!-- 底部結餘條：本月結餘＋上月結餘＝累計結餘 -->
       <v-card elevation="1" class="mb-3">
-        <v-row dense class="pa-2 pa-sm-3">
+        <v-row dense class="pa-2 pa-sm-3" align="center">
           <v-col cols="12" sm="4" style="border-right:1px solid #e2e8f0">
             <div class="pa-2">
-              <div class="text-caption">收入合計</div>
-              <div class="text-h6 font-weight-bold" style="color:#15803d">NT$ {{ fmt(totalIncome) }}</div>
-              <div class="text-caption text-medium-emphasis">{{ incomeComposition }}</div>
+              <div class="text-caption">本月結餘</div>
+              <div class="text-h6 font-weight-bold" :style="`color:${net >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(net) }}</div>
+              <div class="text-caption text-medium-emphasis">收入 {{ fmt(totalIncome) }} − 支出 {{ fmt(totalExpense) }}</div>
             </div>
           </v-col>
           <v-col cols="12" sm="4" style="border-right:1px solid #e2e8f0">
             <div class="pa-2">
-              <div class="text-caption">支出合計</div>
-              <div class="text-h6 font-weight-bold" style="color:#b91c1c">NT$ {{ fmt(totalExpense) }}</div>
-              <div class="text-caption text-medium-emphasis">{{ expenseComposition }}</div>
+              <div class="text-caption">＋ 上月結餘</div>
+              <div class="text-h6 font-weight-bold" :style="`color:${prevCumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(prevCumNet) }}</div>
+              <div class="text-caption text-medium-emphasis">年度 7/1 起累計至上月底</div>
             </div>
           </v-col>
           <v-col cols="12" sm="4">
             <div class="pa-2">
-              <div class="text-caption">本月餘額（淨{{ net >= 0 ? '餘絀' : '短絀' }}）</div>
-              <div class="text-h6 font-weight-bold" :style="`color:${net >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(net) }}</div>
-              <div class="text-caption text-medium-emphasis">收入合計 − 支出合計</div>
+              <div class="text-caption">＝ 累計結餘</div>
+              <div class="text-h6 font-weight-bold" :style="`color:${cumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(cumNet) }}</div>
+              <div class="text-caption text-medium-emphasis">本年度累計淨{{ cumNet >= 0 ? '餘絀' : '短絀' }}</div>
             </div>
           </v-col>
         </v-row>
@@ -173,12 +168,69 @@
         <div><b>認列原則</b>：季繳社費於開單時列預收社費、逐月轉列收入；跨月分攤之預收預付項目按月平攤認列（權責發生制），「月計」為當月認列額而非現金收付額。</div>
       </div>
     </template>
+
+    <!-- 列印版（無金額項目不列示） -->
+    <PrintSheet>
+      <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
+      <div class="print-title">收支月報表</div>
+      <div class="print-meta">報表期間　民國 {{ minguoLabel }}　・　幣別：新臺幣 NT$　・　認列基礎：權責發生制</div>
+
+      <div class="print-section-title">收入明細</div>
+      <table>
+        <thead>
+          <tr><th>項目名稱</th><th class="num" style="width:130px">月計</th></tr>
+        </thead>
+        <tbody>
+          <template v-for="sec in printIncomeSections" :key="sec.code">
+            <tr class="group"><td>{{ sec.name }}</td><td class="num">{{ fmt(sec.amount) }}</td></tr>
+            <tr v-for="it in sec.items" :key="it.label">
+              <td style="padding-left:22px">{{ it.label }}</td><td class="num">{{ fmt(it.amount) }}</td>
+            </tr>
+          </template>
+          <tr class="total"><td>收入合計</td><td class="num">{{ fmt(totalIncome) }}</td></tr>
+        </tbody>
+      </table>
+
+      <div class="print-section-title">支出明細</div>
+      <table>
+        <thead>
+          <tr><th>項目名稱</th><th class="num" style="width:130px">月計</th></tr>
+        </thead>
+        <tbody>
+          <template v-for="grp in printExpenseGroups" :key="grp.code">
+            <tr class="group"><td>{{ grp.name }}</td><td class="num">{{ fmt(grp.amount) }}</td></tr>
+            <tr v-for="it in grp.items" :key="it.code">
+              <td style="padding-left:22px">{{ it.name }}</td><td class="num">{{ fmt(it.amount) }}</td>
+            </tr>
+          </template>
+          <tr class="total"><td>支出合計</td><td class="num">{{ fmt(totalExpense) }}</td></tr>
+        </tbody>
+      </table>
+
+      <table>
+        <tbody>
+          <tr class="total">
+            <td>本月結餘</td><td class="num" style="width:130px">{{ fmt(net) }}</td>
+          </tr>
+          <tr>
+            <td>＋ 上月結餘（年度 7/1 起累計至上月底）</td><td class="num">{{ fmt(prevCumNet) }}</td>
+          </tr>
+          <tr class="total">
+            <td>＝ 累計結餘（本年度累計淨餘絀）</td><td class="num">{{ fmt(cumNet) }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="print-footer">認列原則：權責發生制；季繳社費於開單時列預收社費、逐月轉列收入。無金額之科目不列示。</div>
+      <div class="print-sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>
+    </PrintSheet>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, inject } from 'vue'
 import { fyOf, fyLabel, fyMonths, monthEnd, toMinguoYear } from '../accounting/fiscal.js'
+import PrintSheet from '../components/PrintSheet.vue'
 
 const records = inject('records')
 const receivables = inject('receivables')
@@ -297,16 +349,40 @@ const totalIncome = computed(() => r2(incomeSections.value.reduce((s, x) => s + 
 const totalExpense = computed(() => r2(expenseGroups.value.reduce((s, x) => s + x.amount, 0)))
 const net = computed(() => r2(totalIncome.value - totalExpense.value))
 
+// 上月結餘：扶輪年度 7/1 起累計至上月底的淨餘絀（7 月為 0，每年度歸零）
+const prevCumNet = computed(() => {
+  const fyStart = `${selectedFy.value}-07-01`
+  const end = monthFrom.value
+  if (end <= fyStart) return 0
+  let acc = 0
+  for (const e of entries.value) {
+    if (e.sourceType === 'closing') continue
+    if (e.date < fyStart || e.date >= end) continue
+    for (const l of e.lines) {
+      const acct = acctByCode.value[l.accountCode]
+      if (!acct) continue
+      if (acct.type === 'income') acc += (l.credit || 0) - (l.debit || 0)
+      else if (acct.type === 'expense') acc -= (l.debit || 0) - (l.credit || 0)
+    }
+  }
+  return r2(acc)
+})
+const cumNet = computed(() => r2(net.value + prevCumNet.value))
+
+// ── 列印版資料：無金額的項目與空組不列示 ──
+const printIncomeSections = computed(() => incomeSections.value
+  .filter(s => s.amount)
+  .map(s => ({ ...s, items: s.items.filter(it => it.amount) })))
+const printExpenseGroups = computed(() => expenseGroups.value
+  .filter(g => g.amount)
+  .map(g => ({ ...g, items: g.items.filter(it => it.amount) })))
+
+function printReport() {
+  window.print()
+}
+
 const shortName = (name) => name.replace(/(收入|支出|費)$/, '') || name
 
-const incomeComposition = computed(() => {
-  const parts = incomeSections.value.filter(s => s.amount).map(s => `${shortName(s.name)} ${fmt(s.amount)}`)
-  return parts.length ? parts.join(' ＋ ') : '本月尚無收入'
-})
-const expenseComposition = computed(() => {
-  const parts = expenseGroups.value.filter(g => g.amount).map(g => `${shortName(g.name)} ${fmt(g.amount)}`)
-  return parts.length ? parts.join(' ＋ ') : '本月尚無支出'
-})
 const incomeCaption = computed(() => {
   const parts = incomeSections.value.filter(s => s.amount).map(s => shortName(s.name))
   return parts.length ? parts.join('・') : '—'
