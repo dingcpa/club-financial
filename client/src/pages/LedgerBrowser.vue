@@ -59,12 +59,14 @@
                     <th class="text-right" style="width:110px">借方</th>
                     <th class="text-right" style="width:110px">貸方</th>
                     <th class="text-right" style="width:120px">餘額</th>
+                    <th style="width:200px">備註</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
                     <td class="text-caption text-medium-emphasis" colspan="6">期初餘額</td>
                     <td class="text-right text-caption font-weight-medium">{{ ledger.opening.toLocaleString() }}</td>
+                    <td />
                   </tr>
                   <tr v-for="(row, i) in ledger.rows" :key="i" style="cursor:pointer" @click="viewEntry = row.entry">
                     <td class="text-caption text-medium-emphasis" style="white-space:nowrap">{{ toMinguoDate(row.entry.date) }}</td>
@@ -78,9 +80,14 @@
                     <td class="text-right text-caption">{{ row.line.debit ? row.line.debit.toLocaleString() : '' }}</td>
                     <td class="text-right text-caption">{{ row.line.credit ? row.line.credit.toLocaleString() : '' }}</td>
                     <td class="text-right text-caption font-weight-medium">{{ row.balance.toLocaleString() }}</td>
+                    <td
+                      class="text-caption text-medium-emphasis"
+                      style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                      :title="entryRemark(row.entry)"
+                    >{{ entryRemark(row.entry) }}</td>
                   </tr>
                   <tr v-if="!ledger.rows.length">
-                    <td colspan="7" class="text-center text-medium-emphasis pa-6">本期間無異動</td>
+                    <td colspan="8" class="text-center text-medium-emphasis pa-6">本期間無異動</td>
                   </tr>
                 </tbody>
               </v-table>
@@ -183,6 +190,8 @@ import { fyOf, fyRange, fyLabel, fyMonths, monthEnd, toMinguoDate } from '../acc
 const accounting = inject('accounting')
 const members = inject('members')
 const projects = inject('projects')
+const records = inject('records')
+const payables = inject('payables', null)
 const drillContext = inject('drillContext')
 const activeTab = inject('activeTab', ref(''))
 
@@ -246,6 +255,16 @@ const projectById = computed(() =>
 function projectName(projectId) {
   if (!projectId) return ''
   return projectById.value.get(String(projectId)) || ''
+}
+
+// 備註：回溯原始單據（finance / payables）的備註內容
+const recordsById = computed(() => new Map((records?.value || []).map(r => [r.id, r])))
+const payablesById = computed(() => new Map((payables?.value || []).map(p => [p.id, p])))
+function entryRemark(e) {
+  const id = String(e.id)
+  if (id.startsWith('fin-')) return recordsById.value.get(e.sourceId)?.remark || ''
+  if (id.startsWith('pay-')) return payablesById.value.get(e.sourceId)?.remark || ''
+  return ''
 }
 
 // drill-down 進入點：其他頁面點金額 → 設定篩選並切到分類帳
