@@ -174,9 +174,9 @@ const docItems = [
 ]
 const reportItems = [
   { tab: 'summary', icon: 'mdi-chart-bar', title: '收支月報表' },
-  { tab: 'budget', icon: 'mdi-chart-donut', title: '預算執行表' },
   { tab: 'balance-sheet', icon: 'mdi-scale-balance', title: '資產負債表' },
   { tab: 'cash-flow', icon: 'mdi-cash-fast', title: '現金流量表' },
+  { tab: 'budget', icon: 'mdi-chart-donut', title: '預算執行表' },
 ]
 const bookItems = [
   { tab: 'dues', icon: 'mdi-format-list-bulleted', title: '社友繳費總覽' },

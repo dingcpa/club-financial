@@ -149,6 +149,25 @@ export function resolveRecordAccount(record) {
   return LEGACY_ITEM_MAP[record.item] || null
 }
 
+// ── 報表項目合併顯示 ─────────────────────────────────────────
+// 社費按季拆四類別開單（會費/服務基金/餐費/固定紅箱），報表合併為「X-X月社費」
+export const DUES_MERGE_RE = /^(\d{1,2}-\d{1,2}月)(會費|服務基金|餐費|固定紅箱)$/
+
+// 帳款類別名稱 → 合併組名（非社費四項回 null）
+export function duesGroupLabel(name) {
+  const m = (name || '').trim().match(DUES_MERGE_RE)
+  return m ? `${m[1]}社費` : null
+}
+
+// 收支月報表項目標籤：社費四項合併、各式歡喜紅箱合併為單一「歡喜紅箱」
+export function reportItemLabel(name) {
+  const g = duesGroupLabel(name)
+  if (g) return g
+  const s = (name || '').trim()
+  if (s.startsWith('歡喜紅箱')) return '歡喜紅箱'
+  return s
+}
+
 // ── 表單科目選項（Vuetify grouped select items）──────────────
 
 function leavesOf(accounts) {

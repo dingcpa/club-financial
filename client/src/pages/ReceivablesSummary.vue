@@ -11,6 +11,7 @@
           <span class="text-body-1 text-sm-h6 font-weight-bold">{{ toMinguoYear(selectedYear) }}年度 帳款明細表</span>
         </div>
         <div class="d-flex flex-wrap ga-2 align-center">
+          <v-btn color="primary" variant="tonal" prepend-icon="mdi-printer" size="small" @click="printReport">產生附表</v-btn>
           <v-btn color="success" prepend-icon="mdi-bank-transfer-in" size="small" @click="openMatchModal">收款對帳</v-btn>
           <v-btn color="primary" prepend-icon="mdi-playlist-plus" size="small" @click="openBatchModal">批次產生帳款</v-btn>
           <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus" size="small" @click="openCreateModal">單筆新增</v-btn>
@@ -187,6 +188,58 @@
         </div>
       </div>
     </v-card>
+
+    <!-- 列印附表：項目統計視角 -->
+    <PrintSheet>
+      <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
+      <div class="print-title">帳款明細表（項目統計）</div>
+      <div class="print-meta">民國 {{ toMinguoYear(selectedYear) }} 年度　・　製表日 {{ toMinguoDate(todayStr()) }}　・　幣別：新臺幣 NT$</div>
+      <table>
+        <thead>
+          <tr>
+            <th>性質 / 項目</th>
+            <th class="num" style="width:60px">筆數</th>
+            <th class="num" style="width:100px">應收</th>
+            <th class="num" style="width:100px">已收</th>
+            <th class="num" style="width:100px">未收</th>
+            <th class="num" style="width:90px">免繳</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-for="g in printStats" :key="g.nature">
+            <tr class="group">
+              <td>{{ g.nature }}</td>
+              <td class="num">{{ g.count }}</td>
+              <td class="num">{{ g.target.toLocaleString() }}</td>
+              <td class="num">{{ g.paid.toLocaleString() }}</td>
+              <td class="num">{{ g.unpaid.toLocaleString() }}</td>
+              <td class="num">{{ g.waived ? g.waived.toLocaleString() : '—' }}</td>
+            </tr>
+            <tr v-for="it in g.items" :key="it.item">
+              <td style="padding-left:22px">{{ it.item }}</td>
+              <td class="num">{{ it.count }}</td>
+              <td class="num">{{ it.target.toLocaleString() }}</td>
+              <td class="num">{{ it.paid.toLocaleString() }}</td>
+              <td class="num">{{ it.unpaid.toLocaleString() }}</td>
+              <td class="num">{{ it.waived ? it.waived.toLocaleString() : '—' }}</td>
+            </tr>
+          </template>
+          <tr class="total">
+            <td>合計</td>
+            <td class="num">{{ printGrand.count }}</td>
+            <td class="num">{{ printGrand.target.toLocaleString() }}</td>
+            <td class="num">{{ printGrand.paid.toLocaleString() }}</td>
+            <td class="num">{{ printGrand.unpaid.toLocaleString() }}</td>
+            <td class="num">{{ printGrand.waived ? printGrand.waived.toLocaleString() : '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="print-footer">
+        負數項目為補助抵減（借費用／貸應收）。應收明細未收合計與帳上應收帳款（1111）餘額勾稽：
+        {{ arTieOut.matched ? '一致' : '不一致' }}（明細 {{ arTieOut.detailTotal.toLocaleString() }}／總帳 {{ arTieOut.ledgerTotal.toLocaleString() }}）。
+      </div>
+      <div class="print-sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>
+    </PrintSheet>
 
     <!-- 批次產生帳款 Dialog -->
     <v-dialog v-model="batchModal" :max-width="xs ? undefined : 560" :fullscreen="xs">
@@ -441,8 +494,9 @@ import { ref, computed, inject, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
 import { buildFundAccountOptions, LEGACY_INCOME_ACCOUNT_MAP, CODES } from '../accounting/coa.js'
-import { fyOf, fyLabel, DUES_QUARTERS, duesQuarterPeriod } from '../accounting/fiscal.js'
+import { fyOf, fyLabel, toMinguoDate, DUES_QUARTERS, duesQuarterPeriod } from '../accounting/fiscal.js'
 import { balancesAsOf } from '../accounting/ledger.js'
+import PrintSheet from '../components/PrintSheet.vue'
 
 const { xs } = useDisplay()
 
@@ -914,6 +968,40 @@ async function handleMatchSettle() {
     saving.value = false
   }
 }
+
+// ── 列印附表：全年度項目統計（性質 → 項目，不受畫面篩選影響）──
+const printStats = computed(() => {
+  const r2 = (n) => Math.round(n * 100) / 100
+  const natureOrder = ['社費', '紅箱', '代收', '補助', '暫收', '其他']
+  const byNature = new Map()
+  for (const r of yearItems.value) {
+    const n = natureOf(r)
+    if (!byNature.has(n)) byNature.set(n, new Map())
+    const items = byNature.get(n)
+    if (!items.has(r.sourceRef)) items.set(r.sourceRef, { item: r.sourceRef, count: 0, target: 0, paid: 0, waived: 0 })
+    const g = items.get(r.sourceRef)
+    g.count++
+    if (r.status === 'waived') g.waived += r.amount
+    else { g.target += r.amount; g.paid += paidOf(r) }
+  }
+  return natureOrder.filter(n => byNature.has(n)).map(n => {
+    const items = [...byNature.get(n).values()]
+      .map(g => ({ ...g, target: r2(g.target), paid: r2(g.paid), waived: r2(g.waived), unpaid: r2(g.target - g.paid) }))
+      .sort((a, b) => a.item.localeCompare(b.item, 'zh-Hant'))
+    const sum = (f) => r2(items.reduce((s, g) => s + g[f], 0))
+    return {
+      nature: n, items,
+      count: items.reduce((s, g) => s + g.count, 0),
+      target: sum('target'), paid: sum('paid'), unpaid: sum('unpaid'), waived: sum('waived'),
+    }
+  })
+})
+const printGrand = computed(() => {
+  const r2 = (n) => Math.round(n * 100) / 100
+  const sum = (f) => r2(printStats.value.reduce((s, g) => s + g[f], 0))
+  return { count: printStats.value.reduce((s, g) => s + g.count, 0), target: sum('target'), paid: sum('paid'), unpaid: sum('unpaid'), waived: sum('waived') }
+})
+function printReport() { window.print() }
 
 // 催繳通知已移至「Line請款」頁（LineBilling.vue）
 

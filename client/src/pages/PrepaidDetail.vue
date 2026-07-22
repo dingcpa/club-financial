@@ -5,6 +5,7 @@
         <v-icon color="primary">mdi-clock-plus-outline</v-icon>
         <span class="text-body-1 text-sm-h6 font-weight-bold">預收明細表</span>
         <v-spacer />
+        <v-btn color="primary" variant="tonal" prepend-icon="mdi-printer" size="small" @click="printReport">產生附表</v-btn>
         <v-select
           v-model="selectedFy" :items="fyOptions" density="compact" variant="outlined" hide-details
           style="max-width:150px"
@@ -80,6 +81,45 @@
         </v-table>
       </div>
     </v-card>
+
+    <!-- 列印附表：按對象預收款變動 -->
+    <PrintSheet>
+      <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
+      <div class="print-title">預收明細表</div>
+      <div class="print-meta">{{ fyLabel(selectedFy) }}　・　製表日 {{ toMinguoDate(today) }}　・　幣別：新臺幣 NT$　・　期初預收＋本期新增－本期轉列收入＝期末餘額</div>
+      <template v-for="sec in printSections" :key="sec.code">
+        <div class="print-section-title">{{ sec.code }} {{ sec.name }}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>對象</th>
+              <th class="num" style="width:100px">期初預收</th>
+              <th class="num" style="width:100px">本期新增</th>
+              <th class="num" style="width:110px">本期轉列收入</th>
+              <th class="num" style="width:110px">期末餘額</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="g in sec.rows" :key="g.person">
+              <td>{{ g.person }}</td>
+              <td class="num">{{ fmt(g.opening) }}</td>
+              <td class="num">{{ fmt(g.added) }}</td>
+              <td class="num">{{ fmt(g.recognized) }}</td>
+              <td class="num">{{ fmt(g.closing) }}</td>
+            </tr>
+            <tr class="total">
+              <td>合計</td>
+              <td class="num">{{ fmt(sec.totals.opening) }}</td>
+              <td class="num">{{ fmt(sec.totals.added) }}</td>
+              <td class="num">{{ fmt(sec.totals.recognized) }}</td>
+              <td class="num">{{ fmt(sec.totals.closing) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+      <div class="print-footer">合計與資產負債表預收科目餘額一致（權責發生制：開單掛預收、逐月轉列收入）。</div>
+      <div class="print-sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>
+    </PrintSheet>
   </div>
 </template>
 
@@ -87,6 +127,7 @@
 import { ref, computed, inject } from 'vue'
 import { fyOf, fyRange, fyLabel, toMinguoDate } from '../accounting/fiscal.js'
 import { CODES } from '../accounting/coa.js'
+import PrintSheet from '../components/PrintSheet.vue'
 
 const accounting = inject('accounting')
 const drillDown = inject('drillDown')
@@ -166,4 +207,8 @@ const sections = computed(() => [
   buildSection(CODES.UNEARNED_DUES),
   buildSection(CODES.UNEARNED_OTHER),
 ])
+
+// 列印附表：無異動科目不列示
+const printSections = computed(() => sections.value.filter(sec => sec.rows.length))
+function printReport() { window.print() }
 </script>

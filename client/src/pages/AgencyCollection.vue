@@ -14,9 +14,12 @@
               <div class="text-caption text-medium-emphasis">代收款（2111）收付進度與各案餘額，與資產負債表代收款科目勾稽</div>
             </div>
           </div>
-          <v-btn :color="showForm ? 'grey' : 'primary'" size="small" @click="showForm = !showForm" prepend-icon="mdi-plus">
-            {{ showForm ? '取消' : '新增代收項目' }}
-          </v-btn>
+          <div class="d-flex flex-wrap ga-2">
+            <v-btn color="primary" variant="tonal" size="small" prepend-icon="mdi-printer" @click="printReport">產生附表</v-btn>
+            <v-btn :color="showForm ? 'grey' : 'primary'" size="small" @click="showForm = !showForm" prepend-icon="mdi-plus">
+              {{ showForm ? '取消' : '新增代收項目' }}
+            </v-btn>
+          </div>
         </div>
       </v-card>
 
@@ -328,6 +331,39 @@
       </v-card>
     </div>
 
+    <!-- 列印附表：代收款（2111）總勾稽 -->
+    <PrintSheet>
+      <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
+      <div class="print-title">代收付明細表</div>
+      <div class="print-meta">製表日 {{ toMinguoDate(todayStr) }}　・　幣別：新臺幣 NT$　・　代收款（2111）按案名彙總</div>
+      <table>
+        <thead>
+          <tr>
+            <th>案名 / 對象</th>
+            <th class="num" style="width:130px">開單/收現（貸）</th>
+            <th class="num" style="width:130px">付出（借）</th>
+            <th class="num" style="width:130px">餘額</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="g in agencyLedger" :key="g.person">
+            <td>{{ g.person }}</td>
+            <td class="num">{{ g.credit.toLocaleString() }}</td>
+            <td class="num">{{ g.debit.toLocaleString() }}</td>
+            <td class="num">{{ g.balance.toLocaleString() }}</td>
+          </tr>
+          <tr class="total">
+            <td>合計（＝資產負債表代收款餘額）</td>
+            <td class="num">{{ agencyLedgerCredit.toLocaleString() }}</td>
+            <td class="num">{{ agencyLedgerDebit.toLocaleString() }}</td>
+            <td class="num">{{ agencyLedgerTotal.toLocaleString() }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="print-footer">代收款屬負債科目，不計入收支餘絀；「開單/收現」含開立帳款與直接代收，「付出」為代收款轉繳/結案付出。</div>
+      <div class="print-sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>
+    </PrintSheet>
+
     <!-- Close Dialog -->
     <v-dialog v-model="closeDialog.show" :max-width="xs ? undefined : 400" :fullscreen="xs">
       <v-card class="pa-3 pa-sm-4">
@@ -363,6 +399,8 @@ import { ref, computed, inject } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
 import { buildFundAccountOptions, handlerFundValue, CODES } from '../accounting/coa.js'
+import { toMinguoDate } from '../accounting/fiscal.js'
+import PrintSheet from '../components/PrintSheet.vue'
 
 const { xs } = useDisplay()
 
@@ -570,4 +608,8 @@ const agencyLedgerTotal = computed(() => r2(agencyLedger.value.reduce((s, g) => 
 function ledgerOf(title) {
   return agencyLedger.value.find(g => g.person === title) || null
 }
+
+// 列印附表
+const todayStr = new Date().toISOString().split('T')[0]
+function printReport() { window.print() }
 </script>

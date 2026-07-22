@@ -33,17 +33,18 @@
               <th class="sticky-col-0" style="min-width:60px">職稱</th>
               <th class="sticky-col-1" style="min-width:80px">姓名</th>
               <th
-                v-for="cat in duesCategories"
-                :key="cat"
+                v-for="col in duesColumns"
+                :key="col.label"
                 class="text-center"
-                style="min-width:110px;white-space:nowrap;cursor:pointer"
-                @click="openEditModal(cat)"
-                :title="'點擊編輯 ' + cat + ' 的收費設定'"
+                style="min-width:110px;white-space:nowrap"
+                :style="col.cats.length === 1 ? 'cursor:pointer' : ''"
+                @click="col.cats.length === 1 && openEditModal(col.cats[0])"
+                :title="col.cats.length === 1 ? '點擊編輯 ' + col.label + ' 的收費設定' : '合併欄：' + col.cats.join('＋')"
               >
                 <div class="d-flex flex-column align-center ga-1">
-                  <span class="text-caption">{{ cat }}</span>
-                  <span v-if="getCatSetting(cat)?.standardAmount > 0" class="text-caption text-primary">
-                    (應收 {{ getCatSetting(cat).standardAmount.toLocaleString() }})
+                  <span class="text-caption">{{ col.label }}</span>
+                  <span v-if="colStandard(col) > 0" class="text-caption text-primary">
+                    (應收 {{ colStandard(col).toLocaleString() }})
                   </span>
                 </div>
               </th>
@@ -64,34 +65,36 @@
           </thead>
           <tbody>
             <tr v-if="allUniqueMembers.length === 0">
-              <td :colspan="duesCategories.length + agencyCategories.length + 4" class="text-center text-medium-emphasis pa-12">
+              <td :colspan="duesColumns.length + agencyCategories.length + 4" class="text-center text-medium-emphasis pa-12">
                 尚未建立社友資料且無繳費紀錄
               </td>
             </tr>
             <tr v-for="member in allUniqueMembers" :key="member">
               <td class="sticky-col-0 text-caption text-primary font-weight-medium">{{ getMemberTitle(member) }}</td>
               <td class="sticky-col-1 text-caption font-weight-medium">{{ member }}</td>
-              <td v-for="cat in duesCategories" :key="cat" class="text-center pa-2">
-                <template v-if="getPayment(member, cat) > 0">
-                  <div class="d-flex flex-column align-center" style="cursor:pointer" @click="onEditPayment(member, cat)">
-                    <v-icon size="14" color="success">mdi-check-circle</v-icon>
-                    <span class="text-caption text-success font-weight-bold">{{ getPayment(member, cat).toLocaleString() }}</span>
+              <td v-for="col in duesColumns" :key="col.label" class="text-center pa-2">
+                <template v-if="colInfo(member, col).paid > 0">
+                  <div class="d-flex flex-column align-center" style="cursor:pointer" @click="onCellClick(member, col)">
+                    <v-icon v-if="colInfo(member, col).fullyPaid" size="14" color="success">mdi-check-circle</v-icon>
+                    <v-icon v-else size="14" color="warning">mdi-circle-half-full</v-icon>
+                    <span class="text-caption text-success font-weight-bold">{{ colInfo(member, col).paid.toLocaleString() }}</span>
                   </div>
                 </template>
-                <template v-else-if="getReceivableStatus(member, cat) === 'waived'">
+                <template v-else-if="colInfo(member, col).allWaived">
                   <div class="d-flex flex-column align-center" style="opacity:0.5">
                     <v-icon size="14" color="grey">mdi-cancel</v-icon>
                     <span class="text-caption text-grey text-decoration-line-through">免繳</span>
                   </div>
                 </template>
                 <template v-else>
-                  <div class="d-flex flex-column align-center" style="opacity:0.4">
+                  <div
+                    class="d-flex flex-column align-center" style="opacity:0.4"
+                    :style="col.cats.length > 1 ? 'cursor:pointer' : ''"
+                    @click="col.cats.length > 1 && openGroupDetail(member, col)"
+                  >
                     <v-icon size="14" color="grey-lighten-1">mdi-close-circle</v-icon>
-                    <span v-if="getReceivable(member, cat)?.amount" class="text-caption text-medium-emphasis">
-                      {{ getReceivable(member, cat).amount.toLocaleString() }}
-                    </span>
-                    <span v-else-if="getCatSetting(cat)?.standardAmount > 0" class="text-caption text-medium-emphasis">
-                      {{ getCatSetting(cat).standardAmount.toLocaleString() }}
+                    <span v-if="colInfo(member, col).due" class="text-caption text-medium-emphasis">
+                      {{ colInfo(member, col).due.toLocaleString() }}
                     </span>
                   </div>
                 </template>
@@ -149,6 +152,55 @@
       </v-card-text>
     </v-card>
 
+    <!-- 合併欄細項 Dialog（社費四項） -->
+    <v-dialog v-model="groupDetail.open" :max-width="xs ? undefined : 420" :fullscreen="xs">
+      <v-card>
+        <v-card-title class="d-flex justify-space-between align-center pa-4">
+          <span class="text-h6 font-weight-bold">{{ groupDetail.member }}．{{ groupDetail.label }}</span>
+          <v-btn icon variant="text" @click="groupDetail.open = false"><v-icon>mdi-close</v-icon></v-btn>
+        </v-card-title>
+        <v-card-text class="pt-0">
+          <v-table density="compact">
+            <thead>
+              <tr>
+                <th class="text-caption">項目</th>
+                <th class="text-caption text-right">應收</th>
+                <th class="text-caption text-right">已收</th>
+                <th class="text-caption text-center">狀態</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="r in groupDetail.rows" :key="r.cat"
+                :style="r.hasRecord ? 'cursor:pointer' : ''"
+                :title="r.hasRecord ? '點擊查看收款單' : ''"
+                @click="r.hasRecord && onGroupRowClick(r)"
+              >
+                <td class="text-caption">{{ r.cat }}</td>
+                <td class="text-right text-caption">{{ r.due ? r.due.toLocaleString() : '—' }}</td>
+                <td class="text-right text-caption" :class="r.paid ? 'text-success font-weight-bold' : 'text-medium-emphasis'">
+                  {{ r.paid ? r.paid.toLocaleString() : '—' }}
+                </td>
+                <td class="text-center">
+                  <v-chip v-if="r.status === 'paid'" size="x-small" color="success" variant="tonal">已收</v-chip>
+                  <v-chip v-else-if="r.status === 'partial'" size="x-small" color="warning" variant="tonal">部分</v-chip>
+                  <v-chip v-else-if="r.status === 'waived'" size="x-small" color="grey" variant="tonal">免繳</v-chip>
+                  <v-chip v-else-if="r.status" size="x-small" color="error" variant="tonal">未收</v-chip>
+                  <span v-else class="text-caption text-medium-emphasis">未開單</span>
+                </td>
+              </tr>
+              <tr style="background:#f8fafc">
+                <td class="text-caption font-weight-bold">合計</td>
+                <td class="text-right text-caption font-weight-bold">{{ groupDetail.rows.reduce((s, r) => s + (r.due || 0), 0).toLocaleString() }}</td>
+                <td class="text-right text-caption font-weight-bold text-success">{{ groupDetail.rows.reduce((s, r) => s + (r.paid || 0), 0).toLocaleString() }}</td>
+                <td />
+              </tr>
+            </tbody>
+          </v-table>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
     <!-- 收費設定 Dialog -->
     <v-dialog v-model="isModalOpen" :max-width="xs ? undefined : 400" :fullscreen="xs">
       <v-card>
@@ -178,6 +230,7 @@
 import { ref, computed, inject } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
+import { duesGroupLabel } from '../accounting/coa.js'
 
 const { xs } = useDisplay()
 
@@ -232,6 +285,83 @@ const duesCategories = computed(() => {
     .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0], 'zh-Hant'))
     .map(([cat]) => cat)
 })
+
+// 顯示欄位：社費四項（會費/服務基金/餐費/固定紅箱）合併為「X-X月社費」一欄，其餘各自成欄
+const duesColumns = computed(() => {
+  const cols = []
+  const groupIdx = new Map()
+  for (const cat of duesCategories.value) {
+    const g = duesGroupLabel(cat)
+    if (g) {
+      if (!groupIdx.has(g)) {
+        const col = { label: g, cats: [] }
+        groupIdx.set(g, col)
+        cols.push(col)
+      }
+      groupIdx.get(g).cats.push(cat)
+    } else {
+      cols.push({ label: cat, cats: [cat] })
+    }
+  }
+  return cols
+})
+
+function colStandard(col) {
+  return col.cats.reduce((s, c) => s + (getCatSetting(c)?.standardAmount || 0), 0)
+}
+
+// 合併欄格位彙總：已收/應收（免繳項不計應收）
+function colInfo(member, col) {
+  let paid = 0, due = 0, recCount = 0, waivedCount = 0
+  for (const cat of col.cats) {
+    paid += getPayment(member, cat)
+    const rec = getReceivable(member, cat)
+    if (rec) {
+      recCount++
+      if (rec.status === 'waived') waivedCount++
+      else due += rec.amount
+    }
+  }
+  if (!recCount && !due) due = colStandard(col)
+  return {
+    paid,
+    due,
+    fullyPaid: due > 0 && paid >= due,
+    allWaived: recCount > 0 && waivedCount === recCount,
+  }
+}
+
+// 合併欄細項 Dialog
+const groupDetail = ref({ open: false, member: '', label: '', rows: [] })
+
+function openGroupDetail(member, col) {
+  groupDetail.value = {
+    open: true,
+    member,
+    label: col.label,
+    rows: col.cats.map(cat => {
+      const rec = getReceivable(member, cat)
+      return {
+        cat,
+        due: rec ? (rec.status === 'waived' ? 0 : rec.amount) : (getCatSetting(cat)?.standardAmount || 0),
+        paid: getPayment(member, cat),
+        status: rec ? rec.status : null,
+        hasRecord: !!memberPaymentData.value[member]?.[cat]?.record,
+        member,
+      }
+    }),
+  }
+}
+
+function onCellClick(member, col) {
+  if (col.cats.length === 1) onEditPayment(member, col.cats[0])
+  else openGroupDetail(member, col)
+}
+
+function onGroupRowClick(r) {
+  groupDetail.value.open = false
+  onEditPayment(r.member, r.cat)
+}
 
 const memberPaymentData = computed(() => {
   const data = {}

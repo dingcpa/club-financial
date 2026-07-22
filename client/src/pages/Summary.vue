@@ -230,6 +230,7 @@
 <script setup>
 import { ref, computed, inject } from 'vue'
 import { fyOf, fyLabel, fyMonths, monthEnd, toMinguoYear } from '../accounting/fiscal.js'
+import { reportItemLabel } from '../accounting/coa.js'
 import PrintSheet from '../components/PrintSheet.vue'
 
 const records = inject('records')
@@ -296,7 +297,8 @@ const monthAgg = computed(() => {
       if (acct.type === 'income') {
         if (!incomeItems.has(l.accountCode)) incomeItems.set(l.accountCode, new Map())
         const m = incomeItems.get(l.accountCode)
-        const label = entryItemLabel(e)
+        // 顯示合併：社費四項（會費/服務基金/餐費/固定紅箱）→ X-X月社費、歡喜紅箱各項 → 歡喜紅箱
+        const label = reportItemLabel(entryItemLabel(e))
         m.set(label, r2((m.get(label) || 0) + amt))
       }
     }
@@ -320,7 +322,7 @@ const incomeSections = computed(() => {
     // 目錄：帳款類別設定中掛此科目者（未開單月份顯示灰色 0，如樣張）
     const catalog = (duesSettings.value || [])
       .filter(s => (s.accountCode || '') === a.code)
-      .map(s => s.category)
+      .map(s => reportItemLabel(s.category))
     const labels = [...new Set([...catalog, ...actual.keys()])]
     const items = labels.map(label => ({ label, amount: actual.get(label) || 0 }))
     if (!items.length) items.push({ label: a.name, amount })
