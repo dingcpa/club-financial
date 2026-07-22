@@ -7,4 +7,5 @@ dist-ssr
 .DS_Store
 backups/
 backup/
+/理監事會財務報表-*.pdf
 *.xls
