@@ -728,6 +728,7 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
                 fromAccount: '',
                 toAccount: '',
                 accountCode: r.accountCode || null,
+                projectId: r.projectId || null,
                 sourceReceivableId: r.id,
             };
             await pool.query('INSERT INTO finance SET ?', [record]);
@@ -800,7 +801,7 @@ async function lookupIncomeAccount(category, fallback) {
 // ─── 批次產生帳款（Phase 2）─────────────────────────────────
 app.post('/api/receivables/batch-generate', async (req, res) => {
     try {
-        const { category, memberNames, amount, dueDate, incomeAccount, accountCode, periodStart, periodEnd } = req.body;
+        const { category, memberNames, amount, dueDate, incomeAccount, accountCode, periodStart, periodEnd, projectId } = req.body;
         if (!category || !Array.isArray(memberNames) || memberNames.length === 0) {
             return res.status(400).json({ error: '缺少類別或社友清單' });
         }
@@ -823,8 +824,8 @@ app.post('/api/receivables/batch-generate', async (req, res) => {
         let created = 0;
         for (let i = 0; i < memberNames.length; i++) {
             const [r] = await pool.query(
-                `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status, incomeAccount, accountCode, periodStart, periodEnd) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-                [Date.now() + i, 'dues', category, memberNames[i], amt, dueDate || null, dueYear, 'pending', acct || null, code || null, ps, pe]
+                `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status, incomeAccount, accountCode, periodStart, periodEnd, projectId) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [Date.now() + i, 'dues', category, memberNames[i], amt, dueDate || null, dueYear, 'pending', acct || null, code || null, ps, pe, projectId || null]
             );
             if (r.affectedRows > 0) created++;
         }
@@ -838,7 +839,7 @@ app.post('/api/receivables/batch-generate', async (req, res) => {
 // ─── 單筆新增帳款 ──────────────────────────────────────────
 app.post('/api/receivables', async (req, res) => {
     try {
-        const { sourceType, category, memberName, amount, dueDate, incomeAccount, accountCode, periodStart, periodEnd } = req.body;
+        const { sourceType, category, memberName, amount, dueDate, incomeAccount, accountCode, periodStart, periodEnd, projectId } = req.body;
         if (!category || !memberName) return res.status(400).json({ error: '缺少類別或社友' });
         const amt = parseFloat(amount) || 0;
         const dueYear = (dueDate && dueDate.substring(0, 4)) || new Date().getFullYear().toString();
@@ -846,8 +847,8 @@ app.post('/api/receivables', async (req, res) => {
         const id = Date.now();
         try {
             await pool.query(
-                `INSERT INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status, incomeAccount, accountCode, periodStart, periodEnd) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-                [id, sourceType || 'dues', category, memberName, amt, dueDate || null, dueYear, 'pending', acct || null, accountCode || null, periodStart || null, periodEnd || null]
+                `INSERT INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status, incomeAccount, accountCode, periodStart, periodEnd, projectId) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [id, sourceType || 'dues', category, memberName, amt, dueDate || null, dueYear, 'pending', acct || null, accountCode || null, periodStart || null, periodEnd || null, projectId || null]
             );
         } catch (e) {
             if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '該社友此類別本年度帳款已存在' });
@@ -943,6 +944,7 @@ app.post('/api/receivables/:id/collect', async (req, res) => {
             fromAccount: '',
             toAccount: '',
             accountCode: r.accountCode || null,
+            projectId: r.projectId || null,
             sourceReceivableId: r.id,
         };
         await pool.query('INSERT INTO finance SET ?', [financeRecord]);

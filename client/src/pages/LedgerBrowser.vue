@@ -55,6 +55,7 @@
                     <th style="width:90px">日期</th>
                     <th>摘要</th>
                     <th style="width:120px">對象</th>
+                    <th style="width:130px">活動別</th>
                     <th class="text-right" style="width:110px">借方</th>
                     <th class="text-right" style="width:110px">貸方</th>
                     <th class="text-right" style="width:120px">餘額</th>
@@ -62,19 +63,24 @@
                 </thead>
                 <tbody>
                   <tr>
-                    <td class="text-caption text-medium-emphasis" colspan="5">期初餘額</td>
+                    <td class="text-caption text-medium-emphasis" colspan="6">期初餘額</td>
                     <td class="text-right text-caption font-weight-medium">{{ ledger.opening.toLocaleString() }}</td>
                   </tr>
                   <tr v-for="(row, i) in ledger.rows" :key="i" style="cursor:pointer" @click="viewEntry = row.entry">
                     <td class="text-caption text-medium-emphasis" style="white-space:nowrap">{{ toMinguoDate(row.entry.date) }}</td>
                     <td class="text-caption">{{ row.entry.description }}</td>
                     <td class="text-caption text-medium-emphasis">{{ row.line.person }}</td>
+                    <td class="text-caption">
+                      <v-chip v-if="projectName(row.line.projectId)" size="x-small" color="teal" variant="tonal">
+                        {{ projectName(row.line.projectId) }}
+                      </v-chip>
+                    </td>
                     <td class="text-right text-caption">{{ row.line.debit ? row.line.debit.toLocaleString() : '' }}</td>
                     <td class="text-right text-caption">{{ row.line.credit ? row.line.credit.toLocaleString() : '' }}</td>
                     <td class="text-right text-caption font-weight-medium">{{ row.balance.toLocaleString() }}</td>
                   </tr>
                   <tr v-if="!ledger.rows.length">
-                    <td colspan="6" class="text-center text-medium-emphasis pa-6">本期間無異動</td>
+                    <td colspan="7" class="text-center text-medium-emphasis pa-6">本期間無異動</td>
                   </tr>
                 </tbody>
               </v-table>
@@ -176,6 +182,7 @@ import { fyOf, fyRange, fyLabel, fyMonths, monthEnd, toMinguoDate } from '../acc
 
 const accounting = inject('accounting')
 const members = inject('members')
+const projects = inject('projects')
 const drillContext = inject('drillContext')
 const activeTab = inject('activeTab', ref(''))
 
@@ -230,6 +237,15 @@ const personOptions = computed(() => {
 function acctTitle(code) {
   const a = acctByCode.value[code]
   return a ? `${a.code} ${a.name}` : code
+}
+
+// 活動別：分錄行 projectId → 活動名稱
+const projectById = computed(() =>
+  new Map((projects?.value || []).map(p => [String(p.id), p.name]))
+)
+function projectName(projectId) {
+  if (!projectId) return ''
+  return projectById.value.get(String(projectId)) || ''
 }
 
 // drill-down 進入點：其他頁面點金額 → 設定篩選並切到分類帳

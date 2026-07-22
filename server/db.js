@@ -259,6 +259,7 @@ async function initDB() {
   await pool.query(`ALTER TABLE finance ADD COLUMN IF NOT EXISTS sourceReceivableId BIGINT`)
   // 應收帳款：科目代碼＋權責歸屬期間（取代由名稱正則推期間）
   await pool.query(`ALTER TABLE receivables ADD COLUMN IF NOT EXISTS accountCode VARCHAR(10)`)
+  await pool.query(`ALTER TABLE receivables ADD COLUMN IF NOT EXISTS projectId BIGINT`)
   await pool.query(`ALTER TABLE receivables ADD COLUMN IF NOT EXISTS periodStart VARCHAR(7)`)
   await pool.query(`ALTER TABLE receivables ADD COLUMN IF NOT EXISTS periodEnd VARCHAR(7)`)
   // 帳款類別：科目代碼＋期間月數（開單時據以計算 periodStart/End）

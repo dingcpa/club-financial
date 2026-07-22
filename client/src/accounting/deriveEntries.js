@@ -132,7 +132,7 @@ export function deriveAllEntries({
         sourceType: 'receivable',
         sourceId: r.id,
         description: `${amount < 0 ? '沖減應收' : '開立帳款'}：${r.sourceRef}`,
-        lines: pair(CODES.RECEIVABLE, creditCode, amount, { debitPerson: r.memberName, creditPerson }),
+        lines: pair(CODES.RECEIVABLE, creditCode, amount, { debitPerson: r.memberName, creditPerson, projectId: r.projectId || null }),
       })
     }
 
@@ -148,7 +148,7 @@ export function deriveAllEntries({
           sourceType: 'recognition',
           sourceId: r.id,
           description: `預收轉列：${r.sourceRef} ${month}`,
-          lines: pair(CODES.UNEARNED_DUES, code, m, { debitPerson: r.memberName, creditPerson: r.memberName }),
+          lines: pair(CODES.UNEARNED_DUES, code, m, { debitPerson: r.memberName, creditPerson: r.memberName, projectId: r.projectId || null }),
         })
       }
     }
@@ -192,7 +192,7 @@ export function deriveAllEntries({
           sourceType: 'collection',
           sourceId: f.id,
           description: `${amount < 0 ? '收款沖抵' : '收款'}：${f.item}`,
-          lines: pair(fund.code, CODES.RECEIVABLE, amount, { debitPerson: fund.person, creditPerson: f.member || '' }),
+          lines: pair(fund.code, CODES.RECEIVABLE, amount, { debitPerson: fund.person, creditPerson: f.member || '', projectId }),
         })
         continue
       }

@@ -85,7 +85,7 @@ club-financial/
 | 資料表 | 說明 |
 |--------|------|
 | `finance` | 單據主檔（income/expense/transfer；`accountCode` 科目、`projectId` 專案、`sourceReceivableId` 收款單標記）|
-| `receivables` | 應收帳款（`accountCode`、`periodStart/End` 權責期間；status: pending/partial/paid/waived）|
+| `receivables` | 應收帳款（`accountCode`、`periodStart/End` 權責期間、`projectId` 活動；status: pending/partial/paid/waived）|
 | `accounts` | ★ 會計科目表（二層、isSystem 系統科目、isCash、requiresPerson 人員明細）|
 | `projects` | ★ 活動（原專案類別；收支單據皆可掛，另有 activityDate/location/note 活動屬性）|
 | `activity_registrations` | 活動報名明細（projectId＋memberName UNIQUE；attending/meal/room/busStop/note，統計前端加總）|
@@ -158,7 +158,7 @@ club-financial/
 | `ClosingWizard.vue` | 年度關帳（admin：檢核→年度摘要→鎖帳/解除）|
 | `BalanceSheet.vue` | ★ 資產負債表（經手人往來按人淨額歸邊為其他應收/應付；含銀行存款核對區與提醒；產生 PDF 列印含核對狀態）|
 | `CashFlow.vue` | ★ 現金流量表（直接法，現金=銀行存款，依對方科目分類）|
-| `LedgerBrowser.vue` | ★ 分類帳/日記帳/試算表（選單兩入口＋引擎診斷）|
+| `LedgerBrowser.vue` | ★ 分類帳/日記帳/試算表（選單兩入口＋引擎診斷；分類帳含活動別欄＝分錄行 projectId）|
 | `JournalEntryDialog.vue` | ★ 傳票檢視（借貸全貌、編輯原始單據入口）|
 | `ManualJournal.vue` | ★ 手工傳票 |
 | `OpeningBalance.vue` | ★ 期初餘額設定（admin）|
