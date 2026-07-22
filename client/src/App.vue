@@ -129,6 +129,9 @@ import ManualJournal from './pages/ManualJournal.vue'
 import OpeningBalance from './pages/OpeningBalance.vue'
 import BudgetReport from './pages/BudgetReport.vue'
 import PrepaidDetail from './pages/PrepaidDetail.vue'
+import RedboxStats from './pages/RedboxStats.vue'
+import LineBilling from './pages/LineBilling.vue'
+import ReceiptIssue from './pages/ReceiptIssue.vue'
 import ClosingWizard from './pages/ClosingWizard.vue'
 import { useAccounting } from './composables/useAccounting.js'
 
@@ -183,6 +186,9 @@ const bookItems = [
   { tab: 'journal', icon: 'mdi-notebook-edit-outline', title: '日記帳' },
 ]
 const mgmtItems = [
+  { tab: 'redbox-stats', icon: 'mdi-gift-outline', title: '紅箱統計' },
+  { tab: 'line-billing', icon: 'mdi-bell-ring-outline', title: 'Line請款' },
+  { tab: 'receipt-issue', icon: 'mdi-receipt-text-outline', title: '開立收據' },
 ]
 const activityItems = [
 ]
@@ -216,6 +222,9 @@ const pageMap = {
   'agency': AgencyCollection,
   'receivables': ReceivablesSummary,
   'prepaid-detail': PrepaidDetail,
+  'redbox-stats': RedboxStats,
+  'line-billing': LineBilling,
+  'receipt-issue': ReceiptIssue,
   'categories': CategorySettings,
   'income': IncomeForm,
   'income-list': RecordListPanel,

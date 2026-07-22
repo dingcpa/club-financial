@@ -12,7 +12,6 @@
         </div>
         <div class="d-flex flex-wrap ga-2 align-center">
           <v-btn color="success" prepend-icon="mdi-bank-transfer-in" size="small" @click="openMatchModal">收款對帳</v-btn>
-          <v-btn color="warning" prepend-icon="mdi-bell-ring-outline" size="small" @click="openReminderModal">催繳通知</v-btn>
           <v-btn color="primary" prepend-icon="mdi-playlist-plus" size="small" @click="openBatchModal">批次產生帳款</v-btn>
           <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus" size="small" @click="openCreateModal">單筆新增</v-btn>
           <v-select
@@ -347,35 +346,6 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-    <!-- 催繳通知 Dialog -->
-    <v-dialog v-model="reminderModal" :max-width="xs ? undefined : 560" :fullscreen="xs">
-      <v-card>
-        <v-card-title class="d-flex justify-space-between align-center pa-4">
-          <span class="text-h6 font-weight-bold">社費催繳通知</span>
-          <v-btn icon variant="text" @click="reminderModal = false"><v-icon>mdi-close</v-icon></v-btn>
-        </v-card-title>
-        <v-card-text>
-          <div class="text-caption text-medium-emphasis mb-2">
-            依 {{ toMinguoYear(selectedYear) }} 年度未收帳款自動彙整；可先修改文字，再複製轉發或推播到 LINE 財務群組。
-          </div>
-          <v-textarea v-model="reminderText" rows="12" density="compact" variant="outlined" class="mb-2" style="font-family:monospace" />
-          <div v-if="reminderLogs.length" class="text-caption text-medium-emphasis">
-            最近通知：
-            <div v-for="l in reminderLogs.slice(0, 5)" :key="l.id">
-              {{ (l.createdAt || '').slice(0, 16).replace('T', ' ') }}｜{{ l.channel === 'line-group' ? 'LINE 群組' : '複製文字' }}｜
-              <span :class="l.status === 'sent' ? 'text-success' : (l.status === 'failed' ? 'text-error' : '')">{{ l.status === 'sent' ? '已推播' : (l.status === 'failed' ? '失敗' : '草稿') }}</span>
-            </div>
-          </div>
-        </v-card-text>
-        <v-card-actions class="px-4 pb-4">
-          <v-spacer />
-          <v-btn variant="text" @click="reminderModal = false">關閉</v-btn>
-          <v-btn color="primary" variant="tonal" prepend-icon="mdi-content-copy" @click="copyReminder">複製文字</v-btn>
-          <v-btn color="warning" variant="flat" prepend-icon="mdi-send" :loading="saving" @click="pushReminder">推播 LINE 群組</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
     <!-- 收款對帳 Dialog -->
     <v-dialog v-model="matchModal" :max-width="xs ? undefined : 640" :fullscreen="xs">
       <v-card>
@@ -473,7 +443,6 @@ import Swal from 'sweetalert2'
 import { buildFundAccountOptions, LEGACY_INCOME_ACCOUNT_MAP, CODES } from '../accounting/coa.js'
 import { fyOf, fyLabel, DUES_QUARTERS, duesQuarterPeriod } from '../accounting/fiscal.js'
 import { balancesAsOf } from '../accounting/ledger.js'
-import { apiFetch } from '../composables/apiFetch.js'
 
 const { xs } = useDisplay()
 
@@ -946,85 +915,7 @@ async function handleMatchSettle() {
   }
 }
 
-// ── 催繳通知 ──
-const reminderModal = ref(false)
-const reminderText = ref('')
-const reminderLogs = ref([])
-const reminderMembers = ref([])
-
-function buildReminderText() {
-  const pending = (receivables.value || [])
-    .filter(r => r.dueYear === selectedYear.value && (r.status === 'pending' || r.status === 'partial'))
-  const byMember = new Map()
-  for (const r of pending) {
-    if (!byMember.has(r.memberName)) byMember.set(r.memberName, [])
-    byMember.get(r.memberName).push(r)
-  }
-  reminderMembers.value = [...byMember.keys()]
-  const lines = [`📢 ${toMinguoYear(selectedYear.value)} 年度社費/帳款催繳通知`]
-  let grand = 0
-  for (const [name, items] of byMember) {
-    const total = items.reduce((s, r) => s + remainingOf(r), 0)
-    grand += total
-    lines.push(`\n${name}（未繳合計 NT$ ${total.toLocaleString()}）`)
-    for (const r of items) {
-      lines.push(`  ・${r.sourceRef}：NT$ ${remainingOf(r).toLocaleString()}`)
-    }
-  }
-  lines.push(`\n共 ${byMember.size} 位、合計 NT$ ${grand.toLocaleString()}`)
-  lines.push('請儘速繳納，匯款後歡迎告知末五碼以利對帳，謝謝！')
-  return byMember.size ? lines.join('\n') : '本年度無未收帳款 🎉'
-}
-
-async function openReminderModal() {
-  reminderText.value = buildReminderText()
-  reminderModal.value = true
-  try {
-    const res = await apiFetch('/api/notifications')
-    reminderLogs.value = (await res.json()).filter(l => l.kind === 'dues-reminder')
-  } catch { reminderLogs.value = [] }
-}
-
-async function logReminder(channel) {
-  const res = await apiFetch('/api/notifications/dues-reminder', {
-    method: 'POST',
-    body: JSON.stringify({ channel, content: reminderText.value, memberNames: reminderMembers.value }),
-  })
-  const body = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(body.error || '通知失敗')
-  reminderLogs.value = [body, ...reminderLogs.value]
-  return body
-}
-
-async function copyReminder() {
-  try {
-    await navigator.clipboard.writeText(reminderText.value)
-    await logReminder('text').catch(() => {})
-    Swal.fire({ icon: 'success', title: '已複製，可貼到 LINE 或簡訊', timer: 1500, showConfirmButton: false })
-  } catch {
-    Swal.fire({ icon: 'error', title: '複製失敗', confirmButtonColor: '#ef4444' })
-  }
-}
-
-async function pushReminder() {
-  const confirm = await Swal.fire({
-    title: '推播到 LINE 財務群組？',
-    text: '訊息將立即發送到財務精靈所在的授權群組。',
-    icon: 'question', showCancelButton: true,
-    confirmButtonColor: '#f59e0b', cancelButtonColor: '#6b7280',
-    confirmButtonText: '推播', cancelButtonText: '取消',
-  })
-  if (!confirm.isConfirmed) return
-  saving.value = true
-  try {
-    await logReminder('line-group')
-    Swal.fire({ icon: 'success', title: '已推播到 LINE 群組', timer: 1500, showConfirmButton: false })
-  } catch (e) {
-    Swal.fire({ icon: 'error', title: '推播失敗', text: e.message, confirmButtonColor: '#ef4444' })
-  } finally {
-    saving.value = false
-  }
-}
+// 催繳通知已移至「Line請款」頁（LineBilling.vue）
 
 // ── 免繳 / 恢復 / 刪除 ──
 async function handleWaive(item) {

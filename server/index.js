@@ -1221,6 +1221,104 @@ app.post('/api/notifications/dues-reminder', async (req, res) => {
     }
 });
 
+// ─── Receipts（開立收據）────────────────────────────────────
+// 編號＝民國扶輪年度-四位流水（例 115-0001），年度內連號、作廢不回收
+function receiptFyOf(dateStr) {
+    const [y, m] = String(dateStr).split('-').map(Number);
+    const fyStartYear = m >= 7 ? y : y - 1;
+    return fyStartYear - 1911;
+}
+
+app.get('/api/receipts', async (req, res) => {
+    try {
+        const { fy, member } = req.query;
+        let sql = 'SELECT * FROM receipts WHERE 1=1';
+        const params = [];
+        if (fy) { sql += ' AND fy=?'; params.push(parseInt(fy)); }
+        if (member) { sql += ' AND memberName=?'; params.push(member); }
+        const [rows] = await pool.query(sql + ' ORDER BY receiptNo DESC', params);
+        res.json(rows.map(r => ({
+            ...r,
+            totalAmount: parseFloat(r.totalAmount),
+            items: JSON.parse(r.items || '[]'),
+            financeIds: JSON.parse(r.financeIds || '[]'),
+        })));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read receipts' });
+    }
+});
+
+app.post('/api/receipts', async (req, res) => {
+    try {
+        const { date, memberName, items, financeIds } = req.body;
+        if (!date || !memberName || !Array.isArray(items) || !items.length) {
+            return res.status(400).json({ error: '缺少日期、社友或收據明細' });
+        }
+        const cleanItems = items
+            .map(it => ({ desc: String(it.desc || '').trim(), amount: parseFloat(it.amount) || 0 }))
+            .filter(it => it.desc && it.amount);
+        if (!cleanItems.length) return res.status(400).json({ error: '收據明細不完整' });
+        const totalAmount = Math.round(cleanItems.reduce((s, it) => s + it.amount, 0) * 100) / 100;
+        const fy = receiptFyOf(date);
+
+        // 取號（同年度 MAX 流水 +1）；併發撞號時重試一次
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const [[{ maxNo }]] = await pool.query(
+                `SELECT MAX(CAST(SUBSTRING_INDEX(receiptNo, '-', -1) AS UNSIGNED)) AS maxNo FROM receipts WHERE fy=?`, [fy]
+            );
+            const receiptNo = `${fy}-${String((maxNo || 0) + 1).padStart(4, '0')}`;
+            const receipt = {
+                id: Date.now() + attempt,
+                receiptNo,
+                fy,
+                date,
+                memberName,
+                items: JSON.stringify(cleanItems),
+                totalAmount,
+                financeIds: JSON.stringify(Array.isArray(financeIds) ? financeIds : []),
+                issuedBy: req.user.username,
+            };
+            try {
+                await pool.query('INSERT INTO receipts SET ?', [receipt]);
+                return res.status(201).json({ ...receipt, items: cleanItems, financeIds: financeIds || [] });
+            } catch (e) {
+                if (e.code === 'ER_DUP_ENTRY' && attempt === 0) continue;
+                throw e;
+            }
+        }
+    } catch (e) {
+        console.error('Error creating receipt:', e);
+        res.status(500).json({ error: 'Failed to create receipt' });
+    }
+});
+
+app.put('/api/receipts/:id/void', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { voidReason } = req.body || {};
+        const [rows] = await pool.query('SELECT * FROM receipts WHERE id=?', [id]);
+        if (!rows.length) return res.status(404).json({ error: 'Receipt not found' });
+        await pool.query('UPDATE receipts SET voided=1, voidReason=? WHERE id=?', [voidReason || null, id]);
+        res.json({ ...rows[0], voided: 1, voidReason: voidReason || null });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to void receipt' });
+    }
+});
+
+// ─── 紅箱未結算場次（LINE 財務精靈 redbox_sessions，供紅箱統計提醒）───
+app.get('/api/redbox/sessions', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT sourceId, date, `rows`, updatedAt FROM redbox_sessions');
+        res.json(rows.map(r => {
+            let parsed = [];
+            try { parsed = JSON.parse(r.rows || '[]'); } catch { /* 壞資料忽略 */ }
+            return { sourceId: r.sourceId, date: r.date, updatedAt: r.updatedAt, rows: parsed };
+        }));
+    } catch (e) {
+        res.json([]); // 表不存在（LINE 未啟用）時回空，前端不報錯
+    }
+});
+
 // ─── Attachments（佐證附件）─────────────────────────────────
 // data 為前端壓縮後的 dataURL；單筆上限 3MB、每單據最多 3 張
 async function saveAttachments(refType, refId, attachments, username) {

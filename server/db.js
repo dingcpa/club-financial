@@ -228,6 +228,24 @@ async function initDB() {
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     ) CHARACTER SET utf8mb4
   `)
+  // 收據（開立收據頁：流水編號、可作廢不可刪，作廢不回收編號）
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS receipts (
+      id BIGINT PRIMARY KEY,
+      receiptNo VARCHAR(20) UNIQUE NOT NULL,
+      fy INT NOT NULL,
+      date VARCHAR(10) NOT NULL,
+      memberName VARCHAR(100) NOT NULL,
+      items LONGTEXT NOT NULL,
+      totalAmount DECIMAL(12,2) NOT NULL,
+      financeIds LONGTEXT,
+      issuedBy VARCHAR(50),
+      voided TINYINT NOT NULL DEFAULT 0,
+      voidReason VARCHAR(255),
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_fy (fy)
+    ) CHARACTER SET utf8mb4
+  `)
   // 為已存在的 users 表補上 role 欄位（MariaDB 支援 IF NOT EXISTS）
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'`)
   // 為已存在的 dues_settings 補上「類型」與「對方科目」欄位
