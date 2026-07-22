@@ -171,7 +171,7 @@ club-financial/
 | `ExpenseForm.vue` | 付款單（兩用：勾選未付應付款沖帳＋直接支出可並存；科目分群、發生日期、附件、預付平攤）|
 | `TransferForm.vue` | 調撥單（資產科目間移轉：存入銀行、歸墊；可附件）|
 | `ReceivablesSummary.vue` | 應收明細表（原帳款明細表；季度快速開單、批次產生、收款/免繳/恢復、收款對帳含 partial、明細↔總帳勾稽；產生附表＝項目統計列印；催繳已移至 Line請款）|
-| `PayablesSummary.vue` | ★ 應付明細表（立帳/付款/免付/恢復/刪除、篩選、未付合計↔2112 勾稽）|
+| `PayablesSummary.vue` | ★ 應付明細表（立帳/付款/免付/恢復/刪除、篩選、未付合計↔2112 勾稽；產生附表＝科目×項目統計列印）|
 | `PrepaidDetail.vue` | 預收明細表（2121/2122 按對象：期初/新增/轉列/期末，展開逐筆、drill 分類帳；年度＋月份基準日選擇，期末與同基準日 BS 勾稽；產生附表列印）|
 | `AgencyCollection.vue` | 代收付明細表（收付進度＋每案 2111 勾稽＋總勾稽表＝BS 代收款；產生附表列印）|
 | `RedboxStats.vue` | 紅箱統計（4102 社友×月份交叉表＋項目篩選；LINE 未結算場次提醒）|
@@ -179,7 +179,7 @@ club-financial/
 | `ReceiptIssue.vue` | 開立收據（帶入收款紀錄組收據、年度流水取號、國字大寫金額、列印/作廢浮水印）|
 | `ActivityManagement.vue` | 活動管理（活動主檔＋按社友報名明細：參加/用餐/住房/上車地點；統計自動加總）|
 | `MemberDues.vue` / `MemberList.vue` | 繳費總覽（欄位＝該年度已開帳款項目；社費四項合併為一欄，點金額開細項 dialog）/ 名冊（依 sortOrder 排序、職稱含 IPP、理監事欄、狀態、銀行末五碼、Excel 匯入）|
-| `MeetingAgenda.vue` | 會議議程（理監事會列表＋議案編輯：報告事項/提案 案由說明決議；列印議程、一鍵產生會議文件＝議程＋月報表＋BS＋三附表，期間依會議日期當月）|
+| `MeetingAgenda.vue` | 會議議程（理監事會列表＋議案編輯：報告事項/提案 案由說明決議；列印議程、一鍵產生會議文件＝議程＋月報表＋BS＋應收/應付/預收/代收付四附表，期間依會議日期當月）|
 | `ClubJournal.vue` / `CalendarPage.vue` | 社刊管理（占位，待擴充）/ 行事曆（月曆格：活動管理 activityDate＋理監事會議）|
 | `components/AttachmentPanel.vue` | 附件元件（壓縮上傳、檢視、刪除；四張單據表單共用）|
 | `components/PrintSheet.vue` | 共用列印機制（Teleport＋`src/print.css` @media print；月報表與收據共用）|
