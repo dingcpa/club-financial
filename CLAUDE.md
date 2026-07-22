@@ -156,7 +156,7 @@ club-financial/
 | `Summary.vue` | 收支月報表（小計併於藍色組名列；底部本月結餘＋上月結餘＝累計結餘，年度 7/1 起算；產生 PDF＝列印視圖，零額項目不列示；項目合併顯示：社費四項→「X-X月社費」、歡喜紅箱各項→「歡喜紅箱」，規則見 coa.js reportItemLabel）|
 | `BudgetReport.vue` | 預算執行表（科目別預算/累積實際/執行率；admin 可編製預算）|
 | `ClosingWizard.vue` | 年度關帳（admin：檢核→年度摘要→鎖帳/解除）|
-| `BalanceSheet.vue` | ★ 資產負債表（經手人往來按人淨額歸邊為其他應收/應付；含銀行存款核對區與提醒）|
+| `BalanceSheet.vue` | ★ 資產負債表（經手人往來按人淨額歸邊為其他應收/應付；含銀行存款核對區與提醒；產生 PDF 列印含核對狀態）|
 | `CashFlow.vue` | ★ 現金流量表（直接法，現金=銀行存款，依對方科目分類）|
 | `LedgerBrowser.vue` | ★ 分類帳/日記帳/試算表（選單兩入口＋引擎診斷）|
 | `JournalEntryDialog.vue` | ★ 傳票檢視（借貸全貌、編輯原始單據入口）|

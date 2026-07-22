@@ -9,6 +9,7 @@
         <v-chip size="small" :color="bs.balanced ? 'success' : 'error'" variant="tonal">
           {{ bs.balanced ? '平衡' : '不平衡！' }}
         </v-chip>
+        <v-btn color="primary" variant="tonal" prepend-icon="mdi-printer" size="small" @click="printReport">產生 PDF / 列印</v-btn>
         <v-select
           v-model="selectedFy" :items="fyOptions" density="compact" variant="outlined" hide-details
           style="min-width:130px"
@@ -174,6 +175,84 @@
         </template>
       </div>
     </v-card-text>
+
+    <!-- 列印版 -->
+    <PrintSheet>
+      <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
+      <div class="print-title">資產負債表</div>
+      <div class="print-meta">基準日 {{ toMinguoDate(asOf) }}　・　幣別：新臺幣 NT$　・　{{ bs.balanced ? '借貸平衡' : '（警告：借貸不平衡）' }}</div>
+
+      <div class="print-section-title">資產</div>
+      <table>
+        <tbody>
+          <tr v-for="row in bs.assets" :key="row.code">
+            <td>{{ row.name }}</td>
+            <td class="num" style="width:140px">{{ row.amount.toLocaleString() }}</td>
+          </tr>
+          <template v-for="d in handlerAR" :key="'ar-' + d.person">
+            <tr>
+              <td style="padding-left:22px">經手人往來－{{ d.person }}</td>
+              <td class="num">{{ d.amount.toLocaleString() }}</td>
+            </tr>
+          </template>
+          <tr class="total"><td>資產合計</td><td class="num">{{ bs.totalAssets.toLocaleString() }}</td></tr>
+        </tbody>
+      </table>
+
+      <div class="print-section-title">負債</div>
+      <table>
+        <tbody>
+          <tr v-for="row in bs.liabilities" :key="row.code">
+            <td>{{ row.name }}</td>
+            <td class="num" style="width:140px">{{ row.amount.toLocaleString() }}</td>
+          </tr>
+          <template v-for="d in handlerAP" :key="'ap-' + d.person">
+            <tr>
+              <td style="padding-left:22px">經手人往來－{{ d.person }}</td>
+              <td class="num">{{ (-d.amount).toLocaleString() }}</td>
+            </tr>
+          </template>
+          <tr v-if="!bs.liabilities.length"><td colspan="2">（無負債）</td></tr>
+          <tr class="total"><td>負債合計</td><td class="num">{{ bs.totalLiabilities.toLocaleString() }}</td></tr>
+        </tbody>
+      </table>
+
+      <div class="print-section-title">權益</div>
+      <table>
+        <tbody>
+          <tr v-for="row in bs.equity" :key="row.code">
+            <td>{{ row.name }}</td>
+            <td class="num" style="width:140px">{{ row.amount.toLocaleString() }}</td>
+          </tr>
+          <tr class="total"><td>負債及權益合計</td><td class="num">{{ (bs.totalLiabilities + bs.totalEquity).toLocaleString() }}</td></tr>
+        </tbody>
+      </table>
+
+      <div class="print-section-title">銀行存款核對</div>
+      <table>
+        <thead>
+          <tr>
+            <th>銀行帳戶</th>
+            <th class="num" style="width:110px">帳上餘額</th>
+            <th class="num" style="width:110px">存摺餘額</th>
+            <th class="num" style="width:100px">差額</th>
+            <th style="width:90px">核對日</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in reconRows" :key="'p-' + row.code">
+            <td>{{ row.name }}</td>
+            <td class="num">{{ row.bookBalance.toLocaleString() }}</td>
+            <td class="num">{{ row.recon ? row.recon.statementBalance.toLocaleString() : '—' }}</td>
+            <td class="num">{{ row.recon ? (row.diff === 0 ? '相符' : row.diff.toLocaleString()) : '未核對' }}</td>
+            <td>{{ row.recon ? toMinguoDate(row.recon.reconDate) : '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="print-footer">經手人往來按人淨額歸邊列示（借餘＝其他應收、貸餘＝其他應付）；代收款屬負債，不計入收支餘絀。</div>
+      <div class="print-sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>
+    </PrintSheet>
   </v-card>
 </template>
 
@@ -183,6 +262,7 @@ import Swal from 'sweetalert2'
 import { balanceSheet, balancesAsOf } from '../accounting/ledger.js'
 import { CODES } from '../accounting/coa.js'
 import { fyOf, fyLabel, fyMonths, monthEnd, toMinguoDate } from '../accounting/fiscal.js'
+import PrintSheet from '../components/PrintSheet.vue'
 
 const accounting = inject('accounting')
 const drillDown = inject('drillDown')
@@ -217,6 +297,8 @@ const asOf = computed(() => monthEnd(selectedMonth.value))
 const bs = computed(() => balanceSheet(entries.value, acctByCode.value, { asOf: asOf.value }))
 const handlerAR = computed(() => bs.value.handlerDetail.filter(d => d.amount > 0))
 const handlerAP = computed(() => bs.value.handlerDetail.filter(d => d.amount < 0))
+
+function printReport() { window.print() }
 
 function drill(row) {
   if (!row.drill) return
