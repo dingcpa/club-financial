@@ -272,6 +272,25 @@ async function initDB() {
   await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS bankAccountLast5 VARCHAR(10)`)
   // 單據雙日期：發生日期（權責歸屬；未填視同單據日期）
   await pool.query(`ALTER TABLE finance ADD COLUMN IF NOT EXISTS occurredDate VARCHAR(20)`)
+  // 活動管理：projects 擴充活動屬性欄位
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS activityDate VARCHAR(10)`)
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS location VARCHAR(200)`)
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS note TEXT`)
+  // 活動報名明細（按社友登記參加/用餐/住房/上車地點；統計由前端加總）
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS activity_registrations (
+      id BIGINT PRIMARY KEY,
+      projectId BIGINT NOT NULL,
+      memberName VARCHAR(100) NOT NULL,
+      attending TINYINT NOT NULL DEFAULT 0,
+      meal TINYINT NOT NULL DEFAULT 0,
+      room TINYINT NOT NULL DEFAULT 0,
+      busStop VARCHAR(100),
+      note VARCHAR(255),
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_reg (projectId, memberName)
+    ) CHARACTER SET utf8mb4
+  `)
 
   await seedAccounting()
   console.log('DB tables initialized')

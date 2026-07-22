@@ -7,7 +7,6 @@
 
     <v-tabs v-model="tab" color="primary" density="compact">
       <v-tab value="accounts">會計科目</v-tab>
-      <v-tab value="projects">專案類別</v-tab>
       <v-tab value="dues">帳款類別</v-tab>
       <v-tab value="params">系統參數</v-tab>
     </v-tabs>
@@ -58,44 +57,6 @@
               </tbody>
             </v-table>
           </div>
-        </v-card-text>
-      </v-window-item>
-
-      <!-- ── 專案類別 ─────────────────────────────── -->
-      <v-window-item value="projects">
-        <v-card-text class="pa-2 pa-sm-4">
-          <div class="d-flex justify-space-between align-center mb-3">
-            <div class="text-caption text-medium-emphasis">
-              專案為橫切維度：收入與支出單皆可掛同一專案（如三社聯誼收分攤款＋付餐廳），供專案別收支彙總。
-            </div>
-            <v-btn color="primary" prepend-icon="mdi-plus" size="small" @click="openProjModal(null)">新增專案</v-btn>
-          </div>
-          <v-table density="compact">
-            <thead>
-              <tr>
-                <th>專案名稱</th>
-                <th class="text-center" style="width:90px">狀態</th>
-                <th class="text-center" style="width:110px">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!(projects || []).length">
-                <td colspan="3" class="text-center text-medium-emphasis pa-8">尚無專案</td>
-              </tr>
-              <tr v-for="p in projects" :key="p.id" :class="{ 'text-medium-emphasis': !p.active }">
-                <td class="text-caption">{{ p.name }}</td>
-                <td class="text-center">
-                  <v-chip size="x-small" variant="tonal" :color="p.active ? 'success' : 'error'">
-                    {{ p.active ? '啟用' : '停用' }}
-                  </v-chip>
-                </td>
-                <td class="text-center">
-                  <v-btn size="x-small" variant="tonal" color="primary" class="mr-1" @click="openProjModal(p)">編輯</v-btn>
-                  <v-btn size="x-small" variant="tonal" color="error" @click="handleDeleteProject(p)">刪除</v-btn>
-                </td>
-              </tr>
-            </tbody>
-          </v-table>
         </v-card-text>
       </v-window-item>
 
@@ -216,26 +177,6 @@
       </v-card>
     </v-dialog>
 
-    <!-- 專案 Dialog -->
-    <v-dialog v-model="projModal" :max-width="xs ? undefined : 400" :fullscreen="xs">
-      <v-card>
-        <v-card-title class="d-flex justify-space-between align-center pa-4">
-          <span class="text-h6 font-weight-bold">{{ editingProj ? '編輯專案' : '新增專案' }}</span>
-          <v-btn icon variant="text" @click="projModal = false"><v-icon>mdi-close</v-icon></v-btn>
-        </v-card-title>
-        <v-card-text>
-          <v-form @submit.prevent="handleSaveProject">
-            <v-text-field
-              v-model="projForm.name" label="專案名稱" placeholder="例如：運動會"
-              density="compact" variant="outlined" class="mb-2"
-            />
-            <v-checkbox v-if="editingProj" v-model="projForm.active" label="啟用" density="compact" hide-details class="mb-2" />
-            <v-btn type="submit" color="primary" variant="flat" prepend-icon="mdi-content-save" block>儲存專案</v-btn>
-          </v-form>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
-
     <!-- 帳款類別 Dialog -->
     <v-dialog v-model="duesModal" :max-width="xs ? undefined : 440" :fullscreen="xs">
       <v-card>
@@ -297,10 +238,6 @@ const accounts = inject('accounts')
 const addAccount = inject('addAccount')
 const updateAccount = inject('updateAccount')
 const deleteAccount = inject('deleteAccount')
-const projects = inject('projects')
-const addProject = inject('addProject')
-const updateProject = inject('updateProject')
-const deleteProject = inject('deleteProject')
 const duesSettings = inject('duesSettings')
 const addDuesSetting = inject('addDuesSetting')
 const updateDuesSetting = inject('updateDuesSetting')
@@ -406,49 +343,7 @@ async function handleDeleteAccount(a) {
   }
 }
 
-// ── 專案 ──
-const projModal = ref(false)
-const editingProj = ref(null)
-const projForm = ref({ name: '', active: true })
-
-function openProjModal(p) {
-  editingProj.value = p
-  projForm.value = p ? { name: p.name, active: !!p.active } : { name: '', active: true }
-  projModal.value = true
-}
-
-async function handleSaveProject() {
-  if (!projForm.value.name?.trim()) {
-    Swal.fire({ icon: 'warning', title: '請輸入專案名稱', confirmButtonColor: '#4f46e5' })
-    return
-  }
-  try {
-    if (editingProj.value) {
-      await updateProject(editingProj.value.id, { name: projForm.value.name.trim(), active: projForm.value.active })
-    } else {
-      await addProject({ name: projForm.value.name.trim() })
-    }
-    projModal.value = false
-  } catch (e) {
-    Swal.fire({ icon: 'error', title: '儲存失敗', text: e.message, confirmButtonColor: '#ef4444' })
-  }
-}
-
-async function handleDeleteProject(p) {
-  const result = await Swal.fire({
-    title: '確定要刪除此專案？',
-    html: `將刪除「<b>${p.name}</b>」。已有單據使用的專案無法刪除，可改為停用。`,
-    icon: 'warning', showCancelButton: true,
-    confirmButtonColor: '#ef4444', cancelButtonColor: '#6b7280',
-    confirmButtonText: '確定刪除', cancelButtonText: '取消',
-  })
-  if (!result.isConfirmed) return
-  try {
-    await deleteProject(p.id)
-  } catch (e) {
-    Swal.fire({ icon: 'error', title: '刪除失敗', text: e.message, confirmButtonColor: '#ef4444' })
-  }
-}
+// 專案（活動）管理已移至「活動管理」頁（ActivityManagement.vue）
 
 // ── 帳款類別 ──
 const KIND_OPTIONS = [

@@ -132,6 +132,7 @@ import PrepaidDetail from './pages/PrepaidDetail.vue'
 import RedboxStats from './pages/RedboxStats.vue'
 import LineBilling from './pages/LineBilling.vue'
 import ReceiptIssue from './pages/ReceiptIssue.vue'
+import ActivityManagement from './pages/ActivityManagement.vue'
 import ClosingWizard from './pages/ClosingWizard.vue'
 import { useAccounting } from './composables/useAccounting.js'
 
@@ -191,6 +192,7 @@ const mgmtItems = [
   { tab: 'receipt-issue', icon: 'mdi-receipt-text-outline', title: '開立收據' },
 ]
 const activityItems = [
+  { tab: 'activities', icon: 'mdi-calendar-star', title: '活動管理' },
 ]
 const settingItems = [
   { tab: 'members', icon: 'mdi-account-multiple', title: '社友名冊' },
@@ -225,6 +227,7 @@ const pageMap = {
   'redbox-stats': RedboxStats,
   'line-billing': LineBilling,
   'receipt-issue': ReceiptIssue,
+  'activities': ActivityManagement,
   'categories': CategorySettings,
   'income': IncomeForm,
   'income-list': RecordListPanel,

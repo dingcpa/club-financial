@@ -1101,13 +1101,14 @@ app.get('/api/projects', async (req, res) => {
 
 app.post('/api/projects', async (req, res) => {
     try {
-        const { name, sortOrder } = req.body;
-        if (!name) return res.status(400).json({ error: '專案名稱為必填' });
+        const { name, sortOrder, activityDate, location, note } = req.body;
+        if (!name) return res.status(400).json({ error: '活動名稱為必填' });
         const id = Date.now();
         try {
-            await pool.query('INSERT INTO projects (id, name, sortOrder) VALUES (?,?,?)', [id, name, sortOrder || 999]);
+            await pool.query('INSERT INTO projects (id, name, sortOrder, activityDate, location, note) VALUES (?,?,?,?,?,?)',
+                [id, name, sortOrder || 999, activityDate || null, location || null, note || null]);
         } catch (e) {
-            if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '專案名稱已存在' });
+            if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '活動名稱已存在' });
             throw e;
         }
         const [rows] = await pool.query('SELECT * FROM projects WHERE id=?', [id]);
@@ -1120,11 +1121,14 @@ app.post('/api/projects', async (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const { name, active, sortOrder } = req.body;
+        const { name, active, sortOrder, activityDate, location, note } = req.body;
         const updated = {};
         if (name !== undefined) updated.name = name;
         if (active !== undefined) updated.active = active ? 1 : 0;
         if (sortOrder !== undefined) updated.sortOrder = sortOrder;
+        if (activityDate !== undefined) updated.activityDate = activityDate || null;
+        if (location !== undefined) updated.location = location || null;
+        if (note !== undefined) updated.note = note || null;
         if (!Object.keys(updated).length) return res.status(400).json({ error: '無可更新欄位' });
         const [result] = await pool.query('UPDATE projects SET ? WHERE id=?', [updated, id]);
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Project not found' });
@@ -1140,12 +1144,63 @@ app.delete('/api/projects/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const [used] = await pool.query('SELECT COUNT(*) AS cnt FROM finance WHERE projectId=?', [id]);
-        if (used[0].cnt > 0) return res.status(400).json({ error: `已有 ${used[0].cnt} 筆單據使用此專案，不可刪除（可改為停用）` });
+        if (used[0].cnt > 0) return res.status(400).json({ error: `已有 ${used[0].cnt} 筆單據使用此活動，不可刪除（可改為停用）` });
         const [result] = await pool.query('DELETE FROM projects WHERE id=?', [id]);
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Project not found' });
+        await pool.query('DELETE FROM activity_registrations WHERE projectId=?', [id]);
         res.json({ message: 'Project deleted' });
     } catch (e) {
         res.status(500).json({ error: 'Failed to delete project' });
+    }
+});
+
+// ─── 活動報名明細（按社友登記；整批覆寫式儲存）──────────────
+app.get('/api/projects/:id/registrations', async (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id);
+        const [rows] = await pool.query(
+            'SELECT * FROM activity_registrations WHERE projectId=? ORDER BY memberName', [projectId]);
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read registrations' });
+    }
+});
+
+app.put('/api/projects/:id/registrations', async (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id);
+        const regs = req.body;
+        if (!Array.isArray(regs)) return res.status(400).json({ error: 'Payload must be an array' });
+        const [proj] = await pool.query('SELECT id FROM projects WHERE id=?', [projectId]);
+        if (!proj.length) return res.status(404).json({ error: 'Project not found' });
+
+        const names = regs.map(r => String(r.memberName || '').trim()).filter(Boolean);
+        // 不在名單中的登記列刪除（整批覆寫語意）
+        if (names.length) {
+            const ph = names.map(() => '?').join(',');
+            await pool.query(`DELETE FROM activity_registrations WHERE projectId=? AND memberName NOT IN (${ph})`, [projectId, ...names]);
+        } else {
+            await pool.query('DELETE FROM activity_registrations WHERE projectId=?', [projectId]);
+        }
+        for (let i = 0; i < regs.length; i++) {
+            const r = regs[i];
+            const memberName = String(r.memberName || '').trim();
+            if (!memberName) continue;
+            await pool.query(`
+                INSERT INTO activity_registrations (id, projectId, memberName, attending, meal, room, busStop, note)
+                VALUES (?,?,?,?,?,?,?,?)
+                ON DUPLICATE KEY UPDATE attending=VALUES(attending), meal=VALUES(meal), room=VALUES(room),
+                    busStop=VALUES(busStop), note=VALUES(note)`,
+                [Date.now() + i, projectId, memberName,
+                 r.attending ? 1 : 0, r.meal ? 1 : 0, r.room ? 1 : 0,
+                 (r.busStop || '').trim() || null, (r.note || '').trim() || null]);
+        }
+        const [rows] = await pool.query(
+            'SELECT * FROM activity_registrations WHERE projectId=? ORDER BY memberName', [projectId]);
+        res.json(rows);
+    } catch (e) {
+        console.error('Error saving registrations:', e);
+        res.status(500).json({ error: 'Failed to save registrations' });
     }
 });
 
