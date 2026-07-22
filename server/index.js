@@ -619,8 +619,8 @@ async function generateAgencyReceivables(collectionId, targetMembers, createdDat
         const id = Date.now() + i;
         try {
             await pool.query(
-                `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status) VALUES (?,?,?,?,?,?,?,?)`,
-                [id, 'agency', String(collectionId), t.name, parseFloat(t.amount), createdDate || null, dueYear, 'pending']
+                `INSERT IGNORE INTO receivables (id, sourceType, sourceRef, memberName, amount, dueDate, dueYear, status, accountCode) VALUES (?,?,?,?,?,?,?,?,?)`,
+                [id, 'agency', String(collectionId), t.name, parseFloat(t.amount), createdDate || null, dueYear, 'pending', '2111']
             );
             results.push({ id, memberName: t.name });
         } catch (e) { /* UNIQUE conflict, skip */ }

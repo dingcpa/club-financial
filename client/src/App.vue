@@ -128,6 +128,7 @@ import LedgerBrowser from './pages/LedgerBrowser.vue'
 import ManualJournal from './pages/ManualJournal.vue'
 import OpeningBalance from './pages/OpeningBalance.vue'
 import BudgetReport from './pages/BudgetReport.vue'
+import PrepaidDetail from './pages/PrepaidDetail.vue'
 import ClosingWizard from './pages/ClosingWizard.vue'
 import { useAccounting } from './composables/useAccounting.js'
 
@@ -176,6 +177,7 @@ const reportItems = [
 const bookItems = [
   { tab: 'dues', icon: 'mdi-format-list-bulleted', title: '社友繳費總覽' },
   { tab: 'receivables', icon: 'mdi-file-document-check', title: '帳款明細表' },
+  { tab: 'prepaid-detail', icon: 'mdi-clock-plus-outline', title: '預收明細表' },
   { tab: 'agency', icon: 'mdi-hand-coin', title: '代收付明細表' },
   { tab: 'ledger', icon: 'mdi-notebook-outline', title: '分類帳' },
   { tab: 'journal', icon: 'mdi-notebook-edit-outline', title: '日記帳' },
@@ -213,6 +215,7 @@ const pageMap = {
   'members': MemberList,
   'agency': AgencyCollection,
   'receivables': ReceivablesSummary,
+  'prepaid-detail': PrepaidDetail,
   'categories': CategorySettings,
   'income': IncomeForm,
   'income-list': RecordListPanel,

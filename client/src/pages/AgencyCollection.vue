@@ -10,8 +10,8 @@
           <div class="d-flex align-center ga-2">
             <v-icon color="primary" size="24">mdi-hand-coin</v-icon>
             <div>
-              <div class="text-body-1 font-weight-bold">代收代付專區</div>
-              <div class="text-caption text-medium-emphasis">管理社友間的代收款項，不計入社團正式收支</div>
+              <div class="text-body-1 font-weight-bold">代收付明細表</div>
+              <div class="text-caption text-medium-emphasis">代收款（2111）收付進度與各案餘額，與資產負債表代收款科目勾稽</div>
             </div>
           </div>
           <v-btn :color="showForm ? 'grey' : 'primary'" size="small" @click="showForm = !showForm" prepend-icon="mdi-plus">
@@ -226,6 +226,17 @@
                 </div>
               </div>
 
+              <!-- 2111 勾稽 -->
+              <div v-if="ledgerOf(col.title)" class="d-flex flex-wrap align-center ga-2 pa-2 mb-1 rounded text-caption" style="background:#eef2ff">
+                <v-icon size="14" color="primary">mdi-scale-balance</v-icon>
+                <span>帳上代收款（2111）：</span>
+                <span>開單/收現（貸）<b>{{ ledgerOf(col.title).credit.toLocaleString() }}</b></span>
+                <span>付出（借）<b>{{ ledgerOf(col.title).debit.toLocaleString() }}</b></span>
+                <span class="text-primary font-weight-bold" style="cursor:pointer" @click="drillDown({ accountCode: AGENCY_CODE, person: col.title })">
+                  餘額 NT$ {{ ledgerOf(col.title).balance.toLocaleString() }}
+                </span>
+              </div>
+
               <!-- Actions -->
               <div class="d-flex flex-wrap ga-2 pt-3" style="border-top:1px dashed #fcd34d">
                 <v-btn
@@ -273,6 +284,42 @@
         </div>
       </v-card>
 
+      <!-- 代收款總勾稽（各對象 2111 餘額 ＝ 資產負債表代收款） -->
+      <v-card v-if="agencyLedger.length" elevation="1" class="mt-4">
+        <v-card-title class="d-flex align-center py-2 px-3 px-sm-4" style="border-bottom:2px solid #4f46e5">
+          <v-icon color="primary" size="20" class="mr-1">mdi-scale-balance</v-icon>
+          <span class="text-body-2 font-weight-bold">代收款（2111）總勾稽</span>
+          <v-spacer />
+          <span class="text-body-2 font-weight-bold" style="color:#4f46e5">帳上餘額 NT$ {{ agencyLedgerTotal.toLocaleString() }}</span>
+        </v-card-title>
+        <div style="overflow-x:auto">
+          <v-table density="compact" style="min-width:560px">
+            <thead>
+              <tr>
+                <th class="text-caption">案名 / 對象</th>
+                <th class="text-caption text-right" style="width:130px">開單/收現（貸）</th>
+                <th class="text-caption text-right" style="width:130px">付出（借）</th>
+                <th class="text-caption text-right" style="width:130px">餘額</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="g in agencyLedger" :key="g.person" style="cursor:pointer" @click="drillDown({ accountCode: AGENCY_CODE, person: g.person })">
+                <td class="text-caption">{{ g.person }}</td>
+                <td class="text-right text-caption">{{ g.credit.toLocaleString() }}</td>
+                <td class="text-right text-caption">{{ g.debit.toLocaleString() }}</td>
+                <td class="text-right text-caption font-weight-bold" :style="g.balance ? 'color:#4f46e5' : ''">{{ g.balance.toLocaleString() }}</td>
+              </tr>
+              <tr style="background:#eef2ff">
+                <td class="text-caption font-weight-bold">合計（＝資產負債表代收款餘額）</td>
+                <td class="text-right text-caption font-weight-bold">{{ agencyLedgerCredit.toLocaleString() }}</td>
+                <td class="text-right text-caption font-weight-bold">{{ agencyLedgerDebit.toLocaleString() }}</td>
+                <td class="text-right text-caption font-weight-bold" style="color:#4f46e5">{{ agencyLedgerTotal.toLocaleString() }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+        </div>
+      </v-card>
+
       <!-- Empty State -->
       <v-card v-if="collections.length === 0 && !showForm" elevation="1" class="pa-8 text-center">
         <v-icon size="40" color="grey-lighten-2" class="mb-3">mdi-hand-coin</v-icon>
@@ -315,14 +362,18 @@
 import { ref, computed, inject } from 'vue'
 import { useDisplay } from 'vuetify'
 import Swal from 'sweetalert2'
-import { buildFundAccountOptions, handlerFundValue } from '../accounting/coa.js'
+import { buildFundAccountOptions, handlerFundValue, CODES } from '../accounting/coa.js'
 
 const { xs } = useDisplay()
+
+const AGENCY_CODE = CODES.AGENCY
 
 const members = inject('members')
 const accounts = inject('accounts')
 const collections = inject('agencyCollections')
 const loading = inject('loading')
+const accounting = inject('accounting')
+const drillDown = inject('drillDown')
 const injCreateCollection = inject('createCollection')
 const injRecordPayment = inject('recordPayment')
 const injRemovePayment = inject('removePayment')
@@ -493,4 +544,30 @@ const totalSelectedAmount = computed(() =>
 
 const openCollections = computed(() => collections.value.filter(c => c.status === 'open'))
 const closedCollections = computed(() => collections.value.filter(c => c.status === 'closed'))
+
+// ── 代收款（2111）勾稽：分錄按對象（案名）彙總，合計＝資產負債表代收款餘額 ──
+const r2 = (n) => Math.round(n * 100) / 100
+const agencyLedger = computed(() => {
+  const map = new Map()
+  for (const e of accounting.entries.value) {
+    if (e.sourceType === 'closing') continue
+    for (const l of e.lines) {
+      if (l.accountCode !== AGENCY_CODE) continue
+      const person = l.person || '未指定'
+      if (!map.has(person)) map.set(person, { person, credit: 0, debit: 0 })
+      const g = map.get(person)
+      g.credit += l.credit || 0
+      g.debit += l.debit || 0
+    }
+  }
+  return [...map.values()]
+    .map(g => ({ ...g, credit: r2(g.credit), debit: r2(g.debit), balance: r2(g.credit - g.debit) }))
+    .sort((a, b) => (Math.abs(b.balance) - Math.abs(a.balance)) || a.person.localeCompare(b.person, 'zh-Hant'))
+})
+const agencyLedgerCredit = computed(() => r2(agencyLedger.value.reduce((s, g) => s + g.credit, 0)))
+const agencyLedgerDebit = computed(() => r2(agencyLedger.value.reduce((s, g) => s + g.debit, 0)))
+const agencyLedgerTotal = computed(() => r2(agencyLedger.value.reduce((s, g) => s + g.balance, 0)))
+function ledgerOf(title) {
+  return agencyLedger.value.find(g => g.person === title) || null
+}
 </script>

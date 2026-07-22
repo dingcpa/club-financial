@@ -87,7 +87,10 @@
                 <template v-else>
                   <div class="d-flex flex-column align-center" style="opacity:0.4">
                     <v-icon size="14" color="grey-lighten-1">mdi-close-circle</v-icon>
-                    <span v-if="getCatSetting(cat)?.standardAmount > 0" class="text-caption text-medium-emphasis">
+                    <span v-if="getReceivable(member, cat)?.amount" class="text-caption text-medium-emphasis">
+                      {{ getReceivable(member, cat).amount.toLocaleString() }}
+                    </span>
+                    <span v-else-if="getCatSetting(cat)?.standardAmount > 0" class="text-caption text-medium-emphasis">
                       {{ getCatSetting(cat).standardAmount.toLocaleString() }}
                     </span>
                   </div>
@@ -214,12 +217,20 @@ const availableYears = computed(() => {
   return years.sort((a, b) => b - a)
 })
 
+// 欄位＝該年度已開帳款（receivables）的項目，依最早到期日排序；
+// 不再聯集收入單摘要（項目過多）——未開單的雜項收入請至帳簿查詢
 const duesCategories = computed(() => {
-  const settingCats = (duesSettings.value || []).map(s => (s.category || '').trim()).filter(Boolean)
-  const recordCats = (records.value || [])
-    .filter(r => r.type === 'income' && r.member && r.item && r.date.startsWith(selectedYear.value))
-    .map(r => r.item.trim())
-  return [...new Set([...settingCats, ...recordCats])]
+  const map = new Map() // category → 最早 dueDate
+  for (const r of receivables.value || []) {
+    if (r.sourceType !== 'dues' || String(r.dueYear) !== String(selectedYear.value)) continue
+    const cat = (r.sourceRef || '').trim()
+    if (!cat) continue
+    const d = r.dueDate || '9999-12-31'
+    if (!map.has(cat) || d < map.get(cat)) map.set(cat, d)
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0], 'zh-Hant'))
+    .map(([cat]) => cat)
 })
 
 const memberPaymentData = computed(() => {
@@ -296,11 +307,14 @@ function getPayment(member, cat) {
 }
 
 // 從 receivables 取得特定社費項目的狀態
+function getReceivable(member, cat) {
+  return (receivables.value || []).find(r =>
+    r.sourceType === 'dues' && r.sourceRef === cat && r.memberName === member && String(r.dueYear) === String(selectedYear.value)
+  ) || null
+}
 function getReceivableStatus(member, cat) {
-  const rec = (receivables.value || []).find(r =>
-    r.sourceType === 'dues' && r.sourceRef === cat && r.memberName === member && r.dueYear === selectedYear.value
-  )
-  return rec ? rec.status : null  // 'pending' | 'paid' | 'waived' | null
+  const rec = getReceivable(member, cat)
+  return rec ? rec.status : null  // 'pending' | 'partial' | 'paid' | 'waived' | null
 }
 
 // 從 receivables 取得代收項目的狀態
