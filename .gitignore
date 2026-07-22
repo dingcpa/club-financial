@@ -6,4 +6,5 @@ dist-ssr
 *.local
 .DS_Store
 backups/
+backup/
 *.xls

@@ -93,7 +93,7 @@ club-financial/
 | `manual_journals` | ★ 手工傳票（調整分錄；後端強制借貸平衡）|
 | `opening_balances` | ★ 期初餘額（基準日各科目/人員；累積餘絀由引擎軋差）|
 | `app_settings` | ★ 系統參數（accounting.baseDate、accounting.lockDate 關帳日、dues.monthlyAmount）|
-| `members` | 名冊（status 現職/退社、leaveDate、bankAccountLast5 收款對帳用）|
+| `members` | 名冊（status active 正常/onleave 請假/left 退社、leaveDate、bankAccountLast5 收款對帳用）|
 | `bank_reconciliations` | 銀行存款核對（帳戶/核對日/存摺餘額；同科目同日覆蓋）|
 | `budgets` | 年度預算（扶輪年度＋科目，整批覆寫）|
 | `attachments` | 佐證附件（refType finance/journal；壓縮後 base64，每單據最多 3 張）|
@@ -104,7 +104,7 @@ club-financial/
 ### 關鍵帳務規則（server 端）
 
 - **收款不認列收入**：collect / settle-batch 產生帶 `sourceReceivableId` 的 finance 列（引擎推導「借資金/貸應收」）；收入由開單與預收轉列認列（權責）。
-- **settle-batch 沖抵語意**：納 pending＋partial（以剩餘額）、依傳入順序沖抵，`applied=min(剩餘額,可分配額)`——可分配額不足時尾筆列部分收款（partial）；回傳含 `partialSettled`。`/receivables/outstanding/:memberName` 同樣納 partial 並附 `remaining`。
+- **settle-batch 沖抵語意**：納 pending＋partial（以剩餘額）、依傳入順序沖抵，`applied=min(剩餘額,可分配額)`——可分配額不足時尾筆列部分收款（partial）；回傳含 `partialSettled`。負數應收（補助抵減）**優先整筆沖抵**，其負額回充可分配額後才沖正數帳款。`/receivables/outstanding/:memberName` 同樣納 partial 並附 `remaining`。
 - **reopen / 取消收款 / 刪除收款單**：連動刪除收款單或回退應收狀態。
 - **開單為明確動作**：新增帳款類別或社友「不再」自動全員開單；由應收帳款頁批次產生（含季度社費快速開單，每月金額看 `dues.monthlyAmount`）。
 - **資金帳戶字彙**：`account/fromAccount/toAccount` 只能是銀行名（`一銀帳戶`）或 `經手人:<姓名>`（→1121 經手人往來按人明細）。

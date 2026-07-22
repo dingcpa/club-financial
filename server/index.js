@@ -146,7 +146,7 @@ function buildMemberRow(body, id) {
         address: address || '',
         jobTitle1: jobTitle1 || '',
         jobTitle2: jobTitle2 || '',
-        status: status === 'left' ? 'left' : 'active',
+        status: ['left', 'onleave'].includes(status) ? status : 'active',
         leaveDate: leaveDate || null,
         bankAccountLast5: bankAccountLast5 ? String(bankAccountLast5).trim() : null,
     };
@@ -179,7 +179,11 @@ app.post('/api/members/batch-import', async (req, res) => {
             for (const k of ['nickname', 'birthday', 'email', 'phone', 'mobile', 'address', 'jobTitle1', 'jobTitle2', 'bankAccountLast5', 'status', 'leaveDate']) {
                 if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '') fields[k] = String(r[k]).trim();
             }
-            if (fields.status) fields.status = fields.status === 'left' || fields.status === '退社' ? 'left' : 'active';
+            if (fields.status) {
+                const s = fields.status;
+                fields.status = (s === 'left' || s === '退社') ? 'left'
+                    : (s === 'onleave' || s === '請假') ? 'onleave' : 'active';
+            }
             if (byName[name]) {
                 if (Object.keys(fields).length) await pool.query('UPDATE members SET ? WHERE id=?', [fields, byName[name]]);
                 updated++;
@@ -680,23 +684,29 @@ app.post('/api/receivables/settle-batch', async (req, res) => {
             [...receivableIds, ...receivableIds]
         );
 
-        // 依序沖抵：每筆沖至剩餘額為止，可分配額不足時尾筆列部分收款
+        // 依序沖抵：每筆沖至剩餘額為止，可分配額不足時尾筆列部分收款。
+        // 負數帳款（補助抵減）先行整筆沖抵——其負額回沖可分配額，再依傳入順序沖正數帳款，
+        // 避免補助排序在後時正數帳款被誤列部分收款。
         const total = (parseFloat(receivedAmount) || 0) + (parseFloat(prevOverpayment) || 0);
         let remaining = total;
         const settled = [];
         const partialSettled = [];
         const skipped = [];
         const financeRecords = [];
+        const ordered = [
+            ...receivables.filter(r => (parseFloat(r.amount) - (parseFloat(r.paidAmount) || 0)) < 0),
+            ...receivables.filter(r => (parseFloat(r.amount) - (parseFloat(r.paidAmount) || 0)) >= 0),
+        ];
 
         // 沖抵項 → 產生 finance「收款單」（sourceReceivableId 標記，引擎推導為借資金/貸應收，
         // 不認列收入——收入由開單/預收轉列認列，權責基礎）＋ 更新 receivable
-        for (let i = 0; i < receivables.length; i++) {
-            const r = receivables[i];
+        for (let i = 0; i < ordered.length; i++) {
+            const r = ordered[i];
             const amt = parseFloat(r.amount);
             const alreadyPaid = parseFloat(r.paidAmount) || 0;
             const rcvRemaining = amt - alreadyPaid;
-            const applied = Math.min(rcvRemaining, remaining);
-            if (applied <= 0) {
+            const applied = rcvRemaining < 0 ? rcvRemaining : Math.min(rcvRemaining, remaining);
+            if (applied === 0 || (rcvRemaining > 0 && applied <= 0)) {
                 skipped.push(r);
                 continue;
             }

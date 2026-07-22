@@ -73,8 +73,8 @@
             </v-col>
             <v-col cols="12" sm="6" md="3">
               <v-select
-                v-model="formData.status" label="社籍"
-                :items="[{ title: '現職', value: 'active' }, { title: '退社', value: 'left' }]"
+                v-model="formData.status" label="狀態"
+                :items="STATUS_OPTIONS"
                 density="compact" variant="outlined"
               />
             </v-col>
@@ -102,8 +102,9 @@
           <thead>
             <tr>
               <th style="min-width:80px" class="text-caption">姓名</th>
+              <th style="width:60px" class="text-caption">社名</th>
+              <th style="width:60px" class="text-caption">狀態</th>
               <th style="width:80px" class="text-caption">職稱</th>
-              <th style="width:60px" class="text-caption d-none d-sm-table-cell">社名</th>
               <th style="width:90px" class="text-caption d-none d-md-table-cell">生日</th>
               <th style="width:160px" class="text-caption">聯絡</th>
               <th style="width:80px" class="text-caption d-none d-sm-table-cell">帳號末碼</th>
@@ -113,21 +114,25 @@
           </thead>
           <tbody>
             <tr v-if="filteredMembers.length === 0">
-              <td colspan="8" class="text-center text-medium-emphasis pa-8">尚未建立資料</td>
+              <td colspan="9" class="text-center text-medium-emphasis pa-8">尚未建立資料</td>
             </tr>
             <tr v-for="(member, i) in filteredMembers" :key="member.id" :class="[i % 2 === 0 ? 'bg-white' : 'bg-grey-lighten-5', member.status === 'left' ? 'text-medium-emphasis' : '']">
               <td class="text-caption font-weight-medium">
                 {{ member.name }}
-                <v-chip v-if="member.status === 'left'" size="x-small" color="error" variant="tonal" class="ml-1">退社</v-chip>
+              </td>
+              <td>
+                <v-chip size="x-small" color="primary" variant="tonal">{{ member.nickname }}</v-chip>
+              </td>
+              <td>
+                <v-chip size="x-small" :color="STATUS_COLORS[member.status] || 'success'" variant="tonal">
+                  {{ STATUS_LABELS[member.status] || '正常' }}
+                </v-chip>
               </td>
               <td>
                 <div class="d-flex flex-column">
                   <span class="text-caption text-primary font-weight-bold">{{ member.jobTitle1 || '社友' }}</span>
                   <span v-if="member.jobTitle2" class="text-caption text-medium-emphasis">{{ member.jobTitle2 }}</span>
                 </div>
-              </td>
-              <td class="d-none d-sm-table-cell">
-                <v-chip size="x-small" color="primary" variant="tonal">{{ member.nickname }}</v-chip>
               </td>
               <td class="text-caption text-medium-emphasis d-none d-md-table-cell">{{ member.birthday }}</td>
               <td>
@@ -176,6 +181,14 @@ const showLeft = ref(false)
 const editingId = ref(null)
 const fileInput = ref(null)
 
+const STATUS_OPTIONS = [
+  { title: '正常', value: 'active' },
+  { title: '請假', value: 'onleave' },
+  { title: '退社', value: 'left' },
+]
+const STATUS_LABELS = { active: '正常', onleave: '請假', left: '退社' }
+const STATUS_COLORS = { active: 'success', onleave: 'warning', left: 'error' }
+
 const JOB_TITLES_1 = ['社長(P)', '祕書(S)', '社當(PE)', '副社長(VP)', '前社長(PP)', '社友']
 const JOB_TITLES_2 = ['', '理事', '監事', 'CUSTOM']
 const TITLE_ORDER = { '社長(P)': 1, '祕書(S)': 2, '社當(PE)': 3, '副社長(VP)': 4, '前社長(PP)': 5, '社友': 6, '': 7 }
@@ -211,7 +224,7 @@ function handleEdit(member) {
     jobTitle1: member.jobTitle1 || '社友',
     jobTitle2: isCustom2 ? 'CUSTOM' : (member.jobTitle2 || ''),
     customJobTitle2: isCustom2 ? member.jobTitle2 : '',
-    status: member.status === 'left' ? 'left' : 'active',
+    status: ['left', 'onleave'].includes(member.status) ? member.status : 'active',
     leaveDate: member.leaveDate || '',
     bankAccountLast5: member.bankAccountLast5 || '',
   }
@@ -241,7 +254,7 @@ async function handleDelete(id) {
 const IMPORT_COLUMNS = [
   ['姓名', 'name'], ['社名', 'nickname'], ['職稱1', 'jobTitle1'], ['職稱2', 'jobTitle2'],
   ['生日', 'birthday'], ['市話', 'phone'], ['手機', 'mobile'], ['Email', 'email'],
-  ['地址', 'address'], ['銀行帳號末五碼', 'bankAccountLast5'], ['社籍(現職/退社)', 'status'], ['退社日', 'leaveDate'],
+  ['地址', 'address'], ['銀行帳號末五碼', 'bankAccountLast5'], ['狀態(正常/請假/退社)', 'status'], ['退社日', 'leaveDate'],
 ]
 
 function downloadTemplate() {
