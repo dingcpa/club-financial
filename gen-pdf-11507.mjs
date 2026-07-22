@@ -216,15 +216,16 @@ tr.t td { background: #fafafa; font-weight: bold; }
 .card .amt { font-size: 12.5px; font-weight: bold; }
 .grn { color: #15803d; } .red { color: #b91c1c; } .blu { color: #1d4ed8; }
 .pb { page-break-before: always; }
+.rpt-gap { height: 16px; }
 .foot { font-size: 8px; color: #444; margin-top: 2px; }
 .sign { display: flex; justify-content: space-between; margin-top: 14px; font-size: 10px; }
 </style></head><body>
 
+<!-- 報表一：收支月報表（獨立表頭） -->
 <div class="org">嘉義中區扶輪社 Rotary Club of Chiayi Central ・ 國際扶輪 3470 地區</div>
-<h1>收支月報表暨資產負債表</h1>
-<div class="meta">報表期間 民國 115 年 7 月（收支）／基準日 115-07-31（資產負債）　・　幣別：新臺幣 NT$　・　權責發生制　・　製表日 115-07-22</div>
+<h1>收支月報表</h1>
+<div class="meta">報表期間　民國 115 年 7 月　・　幣別：新臺幣 NT$　・　認列基礎：權責發生制　・　製表日 115-07-22</div>
 
-<h2>收支月報表</h2>
 <div class="cols">
 <div>
 <table><thead><tr><th>收入項目</th><th class="n" style="width:28%">月計</th></tr></thead><tbody>
@@ -241,15 +242,25 @@ ${g.items.map(it => `<tr><td class="i">${esc(it.label)}</td><td class="n">${fmt(
 </tbody></table>
 </div>
 </div>
+<!-- 三卡：本月收入 − 支出 ＝ 本月結餘 -->
 <div class="cards">
-<div class="card" style="border-left-color:#15803d"><div class="lb">本月合計收入</div><div class="amt grn">NT$ ${fmt(totalIncome)}</div></div>
-<div class="card" style="border-left-color:#b91c1c"><div class="lb">－ 本月合計支出</div><div class="amt red">NT$ ${fmt(totalExpense)}</div></div>
-<div class="card"><div class="lb">＝ 本月結餘</div><div class="amt ${net >= 0 ? 'grn' : 'red'}">NT$ ${fmt(net)}</div></div>
-<div class="card"><div class="lb">＋ 上期結餘（期初權益）</div><div class="amt">NT$ ${fmt(prevCum)}</div></div>
-<div class="card"><div class="lb">＝ 累計結餘（＝BS 權益合計）</div><div class="amt blu">NT$ ${fmt(cumNet)}</div></div>
+<div class="card" style="border-left-color:#15803d"><div class="lb">■ 本月合計收入</div><div class="amt grn">NT$ ${fmt(totalIncome)}</div></div>
+<div class="card" style="border-left-color:#b91c1c"><div class="lb">■ 本月合計支出</div><div class="amt red">NT$ ${fmt(totalExpense)}</div></div>
+<div class="card"><div class="lb">■ 本月收支餘額（收入 − 支出）</div><div class="amt ${net >= 0 ? 'grn' : 'red'}">NT$ ${fmt(net)}</div></div>
 </div>
+<!-- 三卡：本月結餘 ＋ 上期結餘 ＝ 累計結餘 -->
+<div class="cards">
+<div class="card"><div class="lb">本月結餘</div><div class="amt ${net >= 0 ? 'grn' : 'red'}">NT$ ${fmt(net)}</div></div>
+<div class="card"><div class="lb">＋ 上期結餘（本期期初權益）</div><div class="amt">NT$ ${fmt(prevCum)}</div></div>
+<div class="card"><div class="lb">＝ 累計結餘（＝資產負債表累積餘絀＋本期餘絀）</div><div class="amt blu">NT$ ${fmt(cumNet)}</div></div>
+</div>
+<div class="foot">認列原則：權責發生制；季繳社費開單掛預收、逐月轉列收入，應付款於立帳日認列費用。</div>
 
-<h2>資產負債表（115-07-31）</h2>
+<!-- 報表二：資產負債表（獨立表頭，與上表為兩張獨立報表） -->
+<div class="rpt-gap"></div>
+<div class="org">嘉義中區扶輪社 Rotary Club of Chiayi Central ・ 國際扶輪 3470 地區</div>
+<h1>資產負債表</h1>
+<div class="meta">基準日　民國 115-07-31　・　幣別：新臺幣 NT$　・　製表日 115-07-22</div>
 <div class="cols">
 <div>
 <table><thead><tr><th>資產</th><th class="n" style="width:28%">金額</th></tr></thead><tbody>
@@ -269,7 +280,7 @@ ${bs.equity.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${fmt(x.amount)}<
 </tbody></table>
 </div>
 </div>
-<div class="foot">認列原則：權責發生制；季繳社費開單掛預收、逐月轉列，應付款於立帳日認列費用。累計結餘＝資產負債表累積餘絀＋本期餘絀。</div>
+<div class="foot">經手人往來按人淨額歸邊列示；代收款屬負債，不計入收支餘絀。</div>
 <div class="sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>
 
 <div class="pb"></div>
@@ -293,14 +304,20 @@ ${prepaidCols(sec)}
 
 </body></html>`
 
-fs.writeFileSync('backup/report-11507.html', html, 'utf8')
+const htmlPath = `backup/report-11507-${Date.now()}.html`
+fs.writeFileSync(htmlPath, html, 'utf8')
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
 const out = 'C:/Code/club-financial/理監事會財務報表-11507.pdf'
+if (fs.existsSync(out)) fs.unlinkSync(out)
 execFileSync(EDGE, [
-  '--headless', '--disable-gpu', '--no-first-run',
-  `--print-to-pdf=${out}`, '--print-to-pdf-no-header',
-  'file:///C:/Code/club-financial/backup/report-11507.html',
+  '--headless=new', '--disable-gpu', '--no-first-run',
+  `--print-to-pdf=${out}`, '--no-pdf-header-footer',
+  `file:///C:/Code/club-financial/${htmlPath}`,
 ], { timeout: 60000 })
+// Edge 可能於行程返回後才寫檔，輪詢等待
+for (let i = 0; i < 60 && !fs.existsSync(out); i++) await new Promise(r => setTimeout(r, 500))
+if (!fs.existsSync(out)) throw new Error('PDF 未產出')
+fs.unlinkSync(htmlPath)
 console.log('PDF 已產出：', out)
 console.log(`月報：收入 ${fmt(totalIncome)}／支出 ${fmt(totalExpense)}／本月結餘 ${fmt(net)}／上期 ${fmt(prevCum)}／累計 ${fmt(cumNet)}`)
 console.log(`BS：資產 ${fmt(bs.totalAssets)}＝負債 ${fmt(bs.totalLiabilities)}＋權益 ${fmt(bs.totalEquity)}`)
