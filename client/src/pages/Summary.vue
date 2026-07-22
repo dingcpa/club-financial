@@ -213,35 +213,43 @@
         </div>
       </div>
 
-      <!-- 本月收入 − 本月支出 ＝ 本月結餘 -->
-      <table>
-        <tbody>
-          <tr>
-            <td>本月合計收入</td><td class="num" style="width:130px">{{ fmt(totalIncome) }}</td>
-          </tr>
-          <tr>
-            <td>－ 本月合計支出</td><td class="num">{{ fmt(totalExpense) }}</td>
-          </tr>
-          <tr class="total">
-            <td>＝ 本月結餘（本月淨{{ net >= 0 ? '餘絀' : '短絀' }}）</td><td class="num">{{ fmt(net) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- 三卡圖示：本月收入 − 本月支出 ＝ 本月結餘 -->
+      <div class="print-cards">
+        <div class="print-card" style="border-left-color:#15803d">
+          <div class="label">■ 本月合計收入</div>
+          <div class="amount" style="color:#15803d">NT$ {{ fmt(totalIncome) }}</div>
+          <div class="caption">{{ incomeCaption }}</div>
+        </div>
+        <div class="print-card" style="border-left-color:#b91c1c">
+          <div class="label">■ 本月合計支出</div>
+          <div class="amount" style="color:#b91c1c">NT$ {{ fmt(totalExpense) }}</div>
+          <div class="caption">{{ expenseCaption }}</div>
+        </div>
+        <div class="print-card" style="border-left-color:#1d4ed8">
+          <div class="label">■ 本月收支餘額</div>
+          <div class="amount" :style="`color:${net >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(net) }}</div>
+          <div class="caption">收入 − 支出（本月淨{{ net >= 0 ? '餘絀' : '短絀' }}）</div>
+        </div>
+      </div>
 
-      <!-- 本月結餘 ＋ 上月結餘 ＝ 累計結餘 -->
-      <table>
-        <tbody>
-          <tr>
-            <td>本月結餘</td><td class="num" style="width:130px">{{ fmt(net) }}</td>
-          </tr>
-          <tr>
-            <td>＋ 上月結餘（年度 7/1 起累計至上月底）</td><td class="num">{{ fmt(prevCumNet) }}</td>
-          </tr>
-          <tr class="total">
-            <td>＝ 累計結餘（本年度累計淨{{ cumNet >= 0 ? '餘絀' : '短絀' }}）</td><td class="num">{{ fmt(cumNet) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- 三卡圖示：本月結餘 ＋ 上月結餘 ＝ 累計結餘 -->
+      <div class="print-cards">
+        <div class="print-card" style="border-left-color:#1d4ed8">
+          <div class="label">本月結餘</div>
+          <div class="amount" :style="`color:${net >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(net) }}</div>
+          <div class="caption">收入 {{ fmt(totalIncome) }} − 支出 {{ fmt(totalExpense) }}</div>
+        </div>
+        <div class="print-card" style="border-left-color:#1d4ed8">
+          <div class="label">＋ 上月結餘</div>
+          <div class="amount" :style="`color:${prevCumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(prevCumNet) }}</div>
+          <div class="caption">年度 7/1 起累計至上月底</div>
+        </div>
+        <div class="print-card" style="border-left-color:#1d4ed8">
+          <div class="label">＝ 累計結餘</div>
+          <div class="amount" :style="`color:${cumNet >= 0 ? '#15803d' : '#b91c1c'}`">NT$ {{ fmt(cumNet) }}</div>
+          <div class="caption">本年度累計淨{{ cumNet >= 0 ? '餘絀' : '短絀' }}</div>
+        </div>
+      </div>
 
       <div class="print-footer">認列原則：權責發生制；季繳社費於開單時列預收社費、逐月轉列收入。無金額之科目不列示。</div>
       <div class="print-sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>

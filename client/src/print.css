@@ -80,6 +80,36 @@
     min-width: 0;
   }
 
+  /* 三卡圖示（月報表結餘摘要） */
+  .print-sheet .print-cards {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-sheet .print-card {
+    flex: 1 1 0;
+    min-width: 0;
+    border: 1px solid #bbb;
+    border-left-width: 4px;
+    border-radius: 4px;
+    padding: 6px 10px;
+  }
+  .print-sheet .print-card .label {
+    font-size: 10px;
+    color: #444;
+  }
+  .print-sheet .print-card .amount {
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1.4;
+  }
+  .print-sheet .print-card .caption {
+    font-size: 9px;
+    color: #666;
+  }
+
   .print-sheet .print-section-title {
     font-size: 13px;
     font-weight: bold;
