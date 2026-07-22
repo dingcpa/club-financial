@@ -70,6 +70,16 @@
     font-weight: bold;
     background: #fafafa;
   }
+  .print-sheet .print-cols {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .print-sheet .print-cols > div {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
   .print-sheet .print-section-title {
     font-size: 13px;
     font-weight: bold;

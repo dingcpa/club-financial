@@ -166,7 +166,7 @@ club-financial/
 | `ExpenseForm.vue` | 付款單（科目分群、發生日期、附件、預付平攤）|
 | `TransferForm.vue` | 調撥單（資產科目間移轉：存入銀行、歸墊；可附件）|
 | `ReceivablesSummary.vue` | 帳款明細表（季度快速開單、批次產生、收款/免繳/恢復、收款對帳含 partial、明細↔總帳勾稽；產生附表＝項目統計列印；催繳已移至 Line請款）|
-| `PrepaidDetail.vue` | 預收明細表（2121/2122 按對象：期初/新增/轉列/期末，展開逐筆、drill 分類帳；產生附表列印）|
+| `PrepaidDetail.vue` | 預收明細表（2121/2122 按對象：期初/新增/轉列/期末，展開逐筆、drill 分類帳；年度＋月份基準日選擇，期末與同基準日 BS 勾稽；產生附表列印）|
 | `AgencyCollection.vue` | 代收付明細表（收付進度＋每案 2111 勾稽＋總勾稽表＝BS 代收款；產生附表列印）|
 | `RedboxStats.vue` | 紅箱統計（4102 社友×月份交叉表＋項目篩選；LINE 未結算場次提醒）|
 | `LineBilling.vue` | Line請款（未收帳款篩選→可編輯請款訊息→LINE 群組推播/複製＋通知紀錄；LINE 未設定自動降級）|

@@ -175,37 +175,43 @@
       <div class="print-title">收支月報表</div>
       <div class="print-meta">報表期間　民國 {{ minguoLabel }}　・　幣別：新臺幣 NT$　・　認列基礎：權責發生制</div>
 
-      <div class="print-section-title">收入明細</div>
-      <table>
-        <thead>
-          <tr><th>項目名稱</th><th class="num" style="width:130px">月計</th></tr>
-        </thead>
-        <tbody>
-          <template v-for="sec in printIncomeSections" :key="sec.code">
-            <tr class="group"><td>{{ sec.name }}</td><td class="num">{{ fmt(sec.amount) }}</td></tr>
-            <tr v-for="it in sec.items" :key="it.label">
-              <td style="padding-left:22px">{{ it.label }}</td><td class="num">{{ fmt(it.amount) }}</td>
-            </tr>
-          </template>
-          <tr class="total"><td>收入合計</td><td class="num">{{ fmt(totalIncome) }}</td></tr>
-        </tbody>
-      </table>
-
-      <div class="print-section-title">支出明細</div>
-      <table>
-        <thead>
-          <tr><th>項目名稱</th><th class="num" style="width:130px">月計</th></tr>
-        </thead>
-        <tbody>
-          <template v-for="grp in printExpenseGroups" :key="grp.code">
-            <tr class="group"><td>{{ grp.name }}</td><td class="num">{{ fmt(grp.amount) }}</td></tr>
-            <tr v-for="it in grp.items" :key="it.code">
-              <td style="padding-left:22px">{{ it.name }}</td><td class="num">{{ fmt(it.amount) }}</td>
-            </tr>
-          </template>
-          <tr class="total"><td>支出合計</td><td class="num">{{ fmt(totalExpense) }}</td></tr>
-        </tbody>
-      </table>
+      <!-- 左收入、右支出雙欄，與畫面一致 -->
+      <div class="print-cols">
+        <div>
+          <div class="print-section-title">收入明細</div>
+          <table>
+            <thead>
+              <tr><th>項目名稱</th><th class="num" style="width:110px">月計</th></tr>
+            </thead>
+            <tbody>
+              <template v-for="sec in printIncomeSections" :key="sec.code">
+                <tr class="group"><td>{{ sec.name }}</td><td class="num">{{ fmt(sec.amount) }}</td></tr>
+                <tr v-for="it in sec.items" :key="it.label">
+                  <td style="padding-left:18px">{{ it.label }}</td><td class="num">{{ fmt(it.amount) }}</td>
+                </tr>
+              </template>
+              <tr class="total"><td>收入合計</td><td class="num">{{ fmt(totalIncome) }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="print-section-title">支出明細</div>
+          <table>
+            <thead>
+              <tr><th>項目名稱</th><th class="num" style="width:110px">月計</th></tr>
+            </thead>
+            <tbody>
+              <template v-for="grp in printExpenseGroups" :key="grp.code">
+                <tr class="group"><td>{{ grp.name }}</td><td class="num">{{ fmt(grp.amount) }}</td></tr>
+                <tr v-for="it in grp.items" :key="it.code">
+                  <td style="padding-left:18px">{{ it.name }}</td><td class="num">{{ fmt(it.amount) }}</td>
+                </tr>
+              </template>
+              <tr class="total"><td>支出合計</td><td class="num">{{ fmt(totalExpense) }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <table>
         <tbody>

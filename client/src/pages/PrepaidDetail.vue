@@ -10,10 +10,15 @@
           v-model="selectedFy" :items="fyOptions" density="compact" variant="outlined" hide-details
           style="max-width:150px"
         />
+        <v-select
+          v-model="selectedMonth" :items="monthOptions" density="compact" variant="outlined" hide-details
+          style="max-width:110px"
+        />
       </v-card-title>
       <v-card-text class="pt-0 pb-3 px-3 px-sm-4">
         <span class="text-caption text-medium-emphasis">
-          按對象列示預收款變動：期初預收＋本期新增－本期轉列收入＝期末餘額。點列展開逐筆明細，點金額查分類帳。合計與資產負債表預收科目餘額一致。
+          按對象列示預收款變動（年度 7/1 起至基準日 <strong>{{ toMinguoDate(asOf) }}</strong>）：期初預收＋本期新增－本期轉列收入＝期末餘額。
+          點列展開逐筆明細，點金額查分類帳。期末合計與同基準日資產負債表預收科目餘額一致。
         </span>
       </v-card-text>
     </v-card>
@@ -86,7 +91,7 @@
     <PrintSheet>
       <div class="print-org">嘉義中區扶輪社 Rotary Club of Chiayi Central</div>
       <div class="print-title">預收明細表</div>
-      <div class="print-meta">{{ fyLabel(selectedFy) }}　・　製表日 {{ toMinguoDate(today) }}　・　幣別：新臺幣 NT$　・　期初預收＋本期新增－本期轉列收入＝期末餘額</div>
+      <div class="print-meta">{{ fyLabel(selectedFy) }}　・　基準日 {{ toMinguoDate(asOf) }}　・　幣別：新臺幣 NT$　・　期初預收＋本期新增－本期轉列收入＝期末餘額</div>
       <template v-for="sec in printSections" :key="sec.code">
         <div class="print-section-title">{{ sec.code }} {{ sec.name }}</div>
         <table>
@@ -117,15 +122,15 @@
           </tbody>
         </table>
       </template>
-      <div class="print-footer">合計與資產負債表預收科目餘額一致（權責發生制：開單掛預收、逐月轉列收入）。</div>
+      <div class="print-footer">期末合計與同基準日資產負債表預收科目餘額一致（權責發生制：開單掛預收、逐月轉列收入）。</div>
       <div class="print-sign"><span>製表：＿＿＿＿＿＿＿＿</span><span>財務：＿＿＿＿＿＿＿＿</span><span>社長：＿＿＿＿＿＿＿＿</span></div>
     </PrintSheet>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, inject } from 'vue'
-import { fyOf, fyRange, fyLabel, toMinguoDate } from '../accounting/fiscal.js'
+import { ref, computed, inject, watch } from 'vue'
+import { fyOf, fyRange, fyLabel, fyMonths, monthEnd, toMinguoDate } from '../accounting/fiscal.js'
 import { CODES } from '../accounting/coa.js'
 import PrintSheet from '../components/PrintSheet.vue'
 
@@ -137,6 +142,7 @@ const acctByCode = computed(() => accounting.acctByCode.value)
 
 const today = new Date().toISOString().split('T')[0]
 const selectedFy = ref(fyOf(today))
+const selectedMonth = ref(today.slice(0, 7))
 const fyOptions = computed(() => {
   const fys = new Set([fyOf(today)])
   for (const e of entries.value) {
@@ -145,6 +151,18 @@ const fyOptions = computed(() => {
   }
   return [...fys].sort((a, b) => b - a).map(fy => ({ title: fyLabel(fy), value: fy }))
 })
+const monthOptions = computed(() =>
+  fyMonths(selectedFy.value).map(ym => ({ title: `${Number(ym.slice(5))} 月底`, value: ym }))
+)
+// 切換年度時，基準月落回該年度（本年度→當月，過往年度→年度末 6 月）
+watch(selectedFy, (fy) => {
+  const months = fyMonths(fy)
+  if (!months.includes(selectedMonth.value)) {
+    selectedMonth.value = fy === fyOf(today) ? today.slice(0, 7) : months[months.length - 1]
+  }
+})
+// 報表基準日（月底）：期末餘額截至此日，與同基準日資產負債表勾稽
+const asOf = computed(() => monthEnd(selectedMonth.value))
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-US')
 const r2 = (n) => Math.round(n * 100) / 100
@@ -162,11 +180,11 @@ function toggle(code, person) {
 }
 
 function buildSection(code) {
-  const [fyStart, fyEnd] = fyRange(selectedFy.value)
+  const [fyStart] = fyRange(selectedFy.value)
   const map = new Map()
   for (const e of entries.value) {
     if (e.sourceType === 'closing') continue
-    if (e.date > fyEnd) continue
+    if (e.date > asOf.value) continue
     for (const l of e.lines) {
       if (l.accountCode !== code) continue
       const person = l.person || '未指定'
